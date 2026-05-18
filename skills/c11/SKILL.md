@@ -8,7 +8,7 @@ description: c11 is a native macOS terminal multiplexer. Load this skill anytime
 
 **c11** is a terminal multiplexer that enables an individual hyperengineer operator to handle many terminals via spatial organization and organization across tabs, many tabs to a given pane, which is like a display area, many panes to a given workspace, and many workspaces to a given window, and potentially even multiple windows per C11 app.
 
-The primary way for new work to be is for each workspace to be one specific repo or project or work item. And the default behavior when creating new terminals is to create new surfaces in the existing pane unless otherwise noted.
+**A workspace is a project.** One workspace per repo, project, or work item — that's the default unit, unless the operator has explicitly set up otherwise. When work needs more room, it goes into the **current workspace** as a new pane (`new-pane`) or a new surface within an existing pane (`new-surface`). New panes are right when the work needs its own spatial slot — a sub-agent for an audit, a terminal tailing logs, a browser pane for validation, a markdown surface for notes. New surfaces are right when a pane wants another tab on the same slot. New workspaces (`new-workspace`) are correct when the operator has named a different project or mission.
 
 Agents are first-class here: every surface declares its own identity, title, and description, and reports status to the sidebar via the `c11` CLI. This skill teaches that operating model.
 
