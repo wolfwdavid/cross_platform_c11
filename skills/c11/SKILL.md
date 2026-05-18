@@ -110,6 +110,19 @@ c11 send-key --workspace $WS --surface $SURF enter
 
 For complex prompts (backticks, code blocks, multi-line), deliver via temp file and tell the receiving agent to `Read /tmp/prompt.md` — shell escaping through `c11 send` is brittle.
 
+**Text is positional, not `--text`.** `c11 send` accepts only `--workspace` and `--surface` flags; the message is the trailing positional argument. Writing `--text "foo"` silently types the literal string `--text` into the terminal because the parser takes `--text` as the positional and `foo` as a stray extra arg. Same shape applies to `c11 set-status`, `c11 log`, and any other CLI that documents text as a positional.
+
+```bash
+# WRONG: sends `--text claude ...` as keystrokes
+c11 send --workspace $WS --surface $SURF --text "claude --dangerously-skip-permissions"
+
+# RIGHT: positional, no --text
+c11 send --workspace $WS --surface $SURF "claude --dangerously-skip-permissions"
+
+# Use -- if the text itself starts with a dash
+c11 send --workspace $WS --surface $SURF -- "--help is not a flag here"
+```
+
 **PTY-only reach.** `c11 send` / `c11 send-key` write bytes into the target terminal surface's PTY. They do NOT dispatch NSEvents to the AppKit responder chain, so they cannot drive non-terminal UI — the TextBox input, settings panels, sidebar controls, find overlays, and any SwiftUI / AppKit control are all unreachable this way. If a task requires typing into or clicking an AppKit element, the c11 socket CLI is the wrong tool. Working alternatives:
 
 - Ask the human operator to exercise the UI and paste back the result.
