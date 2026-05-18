@@ -52490,43 +52490,43 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This will close %lld tabs in this pane. This cannot be undone."
+            "value": "Current tabs that will be closed:"
           }
         },
         "ja": {
           "stringUnit": {
-            "state": "translated",
-            "value": "このペインの %lld 個のタブが閉じられます。この操作は取り消せません。"
+            "state": "needs_review",
+            "value": "閉じられるタブ:"
           }
         },
         "zh-Hans": {
           "stringUnit": {
-            "state": "translated",
-            "value": "这将关闭此窗格中的 %lld 个标签页。此操作无法撤销。"
+            "state": "needs_review",
+            "value": "将关闭的标签页："
           }
         },
         "zh-Hant": {
           "stringUnit": {
-            "state": "translated",
-            "value": "這將關閉此窗格中的 %lld 個分頁。此操作無法復原。"
+            "state": "needs_review",
+            "value": "將關閉的分頁："
           }
         },
         "ko": {
           "stringUnit": {
-            "state": "translated",
-            "value": "이 창의 탭 %lld개가 닫힙니다. 이 작업은 되돌릴 수 없습니다."
+            "state": "needs_review",
+            "value": "닫힐 탭:"
           }
         },
         "ru": {
           "stringUnit": {
-            "state": "translated",
-            "value": "Будет закрыто %lld вкладок в этой панели. Действие нельзя отменить."
+            "state": "needs_review",
+            "value": "Вкладки, которые будут закрыты:"
           }
         },
         "uk": {
           "stringUnit": {
-            "state": "translated",
-            "value": "Буде закрито %lld вкладок у цій панелі. Дію не можна скасувати."
+            "state": "needs_review",
+            "value": "Вкладки, які буде закрито:"
           }
         }
       }
@@ -52537,43 +52537,43 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This will close 1 tab in this pane. This cannot be undone."
+            "value": "Current tab that will be closed:"
           }
         },
         "ja": {
           "stringUnit": {
-            "state": "translated",
-            "value": "このペインの 1 個のタブが閉じられます。この操作は取り消せません。"
+            "state": "needs_review",
+            "value": "閉じられるタブ:"
           }
         },
         "zh-Hans": {
           "stringUnit": {
-            "state": "translated",
-            "value": "这将关闭此窗格中的 1 个标签页。此操作无法撤销。"
+            "state": "needs_review",
+            "value": "将关闭的标签页："
           }
         },
         "zh-Hant": {
           "stringUnit": {
-            "state": "translated",
-            "value": "這將關閉此窗格中的 1 個分頁。此操作無法復原。"
+            "state": "needs_review",
+            "value": "將關閉的分頁："
           }
         },
         "ko": {
           "stringUnit": {
-            "state": "translated",
-            "value": "이 창의 탭 1개가 닫힙니다. 이 작업은 되돌릴 수 없습니다."
+            "state": "needs_review",
+            "value": "닫힐 탭:"
           }
         },
         "ru": {
           "stringUnit": {
-            "state": "translated",
-            "value": "Будет закрыта 1 вкладка в этой панели. Действие нельзя отменить."
+            "state": "needs_review",
+            "value": "Вкладка, которая будет закрыта:"
           }
         },
         "uk": {
           "stringUnit": {
-            "state": "translated",
-            "value": "Буде закрито 1 вкладку в цій панелі. Дію не можна скасувати."
+            "state": "needs_review",
+            "value": "Вкладка, яку буде закрито:"
           }
         }
       }
