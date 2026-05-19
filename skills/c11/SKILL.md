@@ -78,9 +78,11 @@ c11 rename-tab       --surface "$C11_SURFACE_ID" "Awaiting first task"
 c11 set-description  --surface "$C11_SURFACE_ID" "c11 skill loaded. Send your first task to name this surface."
 ```
 
-- On the **next** user message (the operator's real first query), run full title and description orientation against that message. Same flow, one turn later.
+- **On the next real user message, your very first action is to title the surface, before any other tool call.** The "next real user message" is the first turn from the user that isn't itself another bootstrap directive: another `"load X skill"` keeps you deferring; anything that describes work is what you title from. A stale `"Awaiting first task"` lingering past the first work message is a navigation failure, not a minor cosmetic lapse. If you are in a chat whose only turn so far is `"load the c11 skill"`, you wait. The moment the operator's real query arrives, the title is the first thing you set.
 
 The rule is intentionally narrow. It does **not** cover `"read /path/to/X and follow instructions"` (the work lives in the file; read it, then title) or slash-command first turns (the slash skill takes over and titles for its own work). If a bootstrap clause is bundled with real work in the same message (`"load the c11 skill, then plan ticket LAT-42"`), title from the work clause; the bootstrap is noise. If no follow-up ever arrives, the placeholder persists; the operator handles naming via the Bonsplit tab UI or a direct rename instruction.
+
+**Titling is not a one-shot.** After the first real titling, proactively refresh both fields as the work pivots: new ticket, new file, new sub-task, scope change of any meaningful kind. Don't wait for the operator to ask, and don't batch it for the end of the session. The *Keep them current when scope shifts* section below covers the broader discipline; the deferral case above is just the first moment where it matters.
 
 ### Declaring your agent
 
@@ -241,7 +243,7 @@ The operator is running parallel work and context-switching between surfaces; ti
 
 ### Keep them current when scope shifts
 
-Title and description are only useful as a navigable index if they reflect what the surface is *right now*. When your work pivots — planning → implementation, one ticket → another, one file → another, one sub-task → another — refresh both fields **at the pivot**, not at the end of the session. The operator glancing at the sidebar should never see a stale breadcrumb.
+Title and description are only useful as a navigable index if they reflect what the surface is *right now*. When your work pivots — planning → implementation, one ticket → another, one file → another, one sub-task → another — proactively refresh both fields **at the pivot**, not at the end of the session and not when the operator prompts you to. The operator glancing at the sidebar should never see a stale breadcrumb.
 
 Rough test for "did I drift?": if an operator scanning the sidebar would make a different routing decision based on the new state of the work, the title or description is out of date.
 
