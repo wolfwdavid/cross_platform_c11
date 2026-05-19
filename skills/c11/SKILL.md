@@ -374,6 +374,27 @@ c11 send --workspace $WS --surface $SURF "cd /path && $C11_DEFAULT_AGENT_LAUNCH 
 
 This is the default pattern for orchestrated sub-agent launches.
 
+### Pin the sub-agent's base
+
+When the sub-agent will work in a worktree, the prompt must name the base
+branch or SHA explicitly. Don't say "fresh worktree" — the agent will
+inherit whatever HEAD is at spawn time, which may be a working branch you
+don't intend to include.
+
+```text
+# WRONG — agent inherits caller's branch, transitively pulls in work
+# that may not belong in this scope.
+"Work in a fresh worktree and ship a PR for X."
+
+# RIGHT — base is explicit; lineage is auditable.
+"Branch off origin/main at <SHA from `git rev-parse origin/main`> and ship a PR for X."
+"Branch off release/v0.49.0 and ship a PR for X."
+```
+
+The cost is one line in the prompt. The benefit is no downstream
+"what is this branch actually based on?" mystery — and no surprise when
+the sub-agent's PR transitively requires another open PR to land first.
+
 > **Spawning a second instance of your own agent type is the polling-deadlock case.** Two-call launches that wait for the sidebar to settle on `Idle` are workspace-scoped, so a second claude (or second codex, etc.) in the same workspace makes the status row never decisively report idle and the loop hangs. Default to the one-shot pattern above. Before reaching for two-call polling or any agent-specific quirk (the claude wrapper, codex `--yolo` vs `exec`, banner-string scraping), check [`references/orchestration.md#per-agent-launch-quirks`](references/orchestration.md#per-agent-launch-quirks).
 
 **Never screen-scrape `c11 read-screen` for prompt characters or banner strings.** They drift across releases and fail silently. See [`references/orchestration.md`](references/orchestration.md) for full multi-agent orchestration patterns.
