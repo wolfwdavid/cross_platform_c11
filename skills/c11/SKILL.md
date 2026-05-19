@@ -66,6 +66,22 @@ c11 set-description  --surface "$C11_SURFACE_ID" "Planning the migration off the
 
 **If the user's opening message is absent or ambiguous, ask before orienting.** This aligns with the global "dialogue" norm — don't silently rename a tab `"Explore"` just to have something in the sidebar. A direct request ("fix this bug", "what is X called") is not ambiguous; proceed with the request and run orientation in the same turn.
 
+**If the user's opening message is bootstrap-only, defer titling to the next user message.** A bootstrap-only first message is one whose payload is "hydrate context" rather than "do work." Examples: `"load the c11 skill"`, `"you are running inside c11, load the c11 skill"` (the current launcher style), `"load the c11 and lattice skills"`. The operator's real first query is one turn behind, and the title should reflect that, not the bootstrap directive.
+
+While deferring:
+
+- Run identity orientation immediately. `c11 identify`, `c11 tree`, `c11 set-agent` declare *who* the agent is, independent of work, and are safe to fire now.
+- Set a placeholder title and description that honestly reflect the orienting state:
+
+```bash
+c11 rename-tab       --surface "$C11_SURFACE_ID" "Awaiting first task"
+c11 set-description  --surface "$C11_SURFACE_ID" "c11 skill loaded. Send your first task to name this surface."
+```
+
+- On the **next** user message (the operator's real first query), run full title and description orientation against that message. Same flow, one turn later.
+
+The rule is intentionally narrow. It does **not** cover `"read /path/to/X and follow instructions"` (the work lives in the file; read it, then title) or slash-command first turns (the slash skill takes over and titles for its own work). If a bootstrap clause is bundled with real work in the same message (`"load the c11 skill, then plan ticket LAT-42"`), title from the work clause; the bootstrap is noise. If no follow-up ever arrives, the placeholder persists; the operator handles naming via the Bonsplit tab UI or a direct rename instruction.
+
 ### Declaring your agent
 
 `c11 set-agent` writes `terminal_type` and `model` to the surface manifest:
