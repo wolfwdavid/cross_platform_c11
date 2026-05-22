@@ -321,6 +321,21 @@ A trivial inline fix during the operator's live conversation is allowed (a READM
 
 ---
 
+## Build for debuggability: extensive logs + automated access
+
+A meta-principle the Architect bakes into the build plan and every delegator carries into implementation. Agents debug almost exclusively from artifacts: logs, status endpoints, structured outputs, exit codes. When the system being built makes those artifacts cheap to produce and easy to consume, the loop tightens dramatically — failures get diagnosed in seconds, sub-agents self-validate without operator intervention, and the Result Validator's Phase 4 audit has more to read.
+
+Bias toward:
+
+- **Generous structured logging by default.** Every meaningful step logs what it did with enough context to reconstruct state later. JSON lines when volume warrants. Don't gate behind verbose flags by default — the cost of "too much log" is trivial compared to the cost of one missing breadcrumb at 2am.
+- **Automated access surfaces.** Every running system should expose a programmatic seam an agent can hit without a UI: a CLI subcommand, a Unix socket, an HTTP endpoint, a `--json` flag on the relevant binaries. If the delegator can't `curl` / `grep` / query what it just built, the next debugging pass needs an operator in front of a screen, which this workflow exists to avoid.
+- **Surfaceable status, not buried state.** Expose queues, in-flight jobs, last-error, health. `status` / `inspect` / `dump` subcommands cost almost nothing at write-time and pay back every time something goes sideways.
+- **Legible failures.** Errors print why, what, and (when known) what to try. Stack traces alone are evidence, not diagnosis.
+
+Architects call this out explicitly in the project `CLAUDE.md` (Step 1.5) so every future delegator in the project sees it. The Build Plan (Step 2) reflects it in component design — observability is part of the spec, not a Phase-4 retrofit.
+
+---
+
 ## Resume path
 
 If the skill is invoked on a project that already has `SPEC.md`, `BUILDPLAN.md`, and `.lattice/orchestration/run-state.md`, the Architect detects an in-flight run. (Project `CLAUDE.md` is also detected and refreshed if its standard sections are stale.)
