@@ -6526,9 +6526,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             NSApp.activate(ignoringOtherApps: true)
             return
         }
+        // Initial content height is a starting point only — the
+        // preferredContentSize sync below drives the actual window
+        // height from SwiftUI's intrinsic layout on first relayout.
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 540, height: 390),
-            styleMask: [.titled, .closable],
+            contentRect: NSRect(x: 0, y: 0, width: 540, height: 480),
+            styleMask: [.titled, .closable, .resizable],
             backing: .buffered,
             defer: false
         )
@@ -6538,7 +6541,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         let rootView = AgentSkillsOnboardingSheet(onDismiss: { [weak window] in
             window?.close()
         })
-        window.contentView = NSHostingView(rootView: rootView)
+        // NSHostingController.sizingOptions = .preferredContentSize syncs
+        // the controller's preferredContentSize from SwiftUI's intrinsic
+        // layout on every relayout (macOS 13+). AppKit propagates the
+        // controller's preferredContentSize to the containing window's
+        // contentSize, so the window auto-fits the SwiftUI content height
+        // as the install/celebratory states change row counts. Reading
+        // `view.fittingSize` immediately after assigning the controller
+        // (the previous approach) returned zero because SwiftUI hadn't
+        // laid out yet — the window stayed at the pre-set frame and the
+        // content compressed onto the same Y.
+        let hosting = NSHostingController(rootView: rootView)
+        if #available(macOS 13.0, *) {
+            hosting.sizingOptions = [.preferredContentSize]
+        }
+        window.contentViewController = hosting
         window.center()
         window.makeKeyAndOrderFront(nil)
         agentSkillsOnboardingWindow = window
