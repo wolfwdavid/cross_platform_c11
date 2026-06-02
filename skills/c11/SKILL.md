@@ -556,6 +556,14 @@ When in c11, prefer the embedded browser over Chrome MCP (`mcp__claude-in-chrome
 
 Reach for Chrome MCP only when **not** in c11 or when a Chrome-specific feature is required. See the `c11-browser` sibling skill for the full automation API.
 
+### Iterate in place — one surface per artifact
+
+When you re-render or edit a document you're previewing, **reload the existing surface** instead of running `open` again. Inside c11, repeated `open <file>` on the same path stacks a new browser surface each time (and can split a new pane), so an edit-render-review loop quietly piles up duplicate panes.
+
+- Capture the surface ref once (`c11 tree --no-layout`, or the `surface:<n>` the first open returns).
+- After each change, `c11 browser reload --surface <ref>`.
+- Keep one surface per artifact; close strays with `c11 close-surface --surface <ref>`, and leave terminal surfaces (often peer agents) alone.
+
 ### Opening a browser pane on a local service
 
 If the browser pane targets a local daemon (e.g. `lattice dashboard`, a dev server), start the daemon **before** creating the browser pane — otherwise the browser loads an error page and won't auto-refresh when the service comes up later. If you do have to open the pane first, reload it once the listener is live:
