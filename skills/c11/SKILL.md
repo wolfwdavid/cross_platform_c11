@@ -103,6 +103,8 @@ The rule is intentionally narrow. It does **not** cover `"read /path/to/X and fo
 
 **Titling is not a one-shot.** After the first real titling, proactively refresh both fields as the work pivots: new ticket, new file, new sub-task, scope change of any meaningful kind. Don't wait for the operator to ask, and don't batch it for the end of the session. The *Keep them current when scope shifts* section below covers the broader discipline; the deferral case above is just the first moment where it matters.
 
+> When inside Claude Code, the SessionStart hook automatically pushes the session id into c11's **conversation store** (`c11 conversation push --kind claude-code --id <id> --source hook`). c11 reads that ref at workspace-restore time and types `claude --dangerously-skip-permissions --resume <id>` into the panel — no agent action required. See [Conversation primitives](#conversation-primitives) below.
+
 ### Declaring your agent
 
 `c11 set-agent` writes `terminal_type` and `model` to the surface manifest:
@@ -584,7 +586,7 @@ disown
 
 ## Workspace persistence
 
-c11 can snapshot a workspace to disk and restore it later with the layout, surface titles, metadata (including `mailbox.*` pane metadata), and — when opted-in — resumed Claude Code sessions.
+c11 can snapshot a workspace to disk and restore it later with the layout, surface titles, metadata (including `mailbox.*` pane metadata), and — for any surface that captured a `ConversationRef` — the agent conversation, resumed via the per-TUI strategy.
 
 ```bash
 # Capture the current workspace to ~/.c11-snapshots/<ulid>.json
@@ -593,15 +595,49 @@ c11 snapshot
 # List what's on disk (newest first)
 c11 list-snapshots
 
-# Restore by id (fresh shells)
+# Restore by id. Surfaces with a captured ConversationRef resume via
+# the per-TUI strategy (e.g., Claude Code re-spawns as `cc --resume
+# <session_id>`); surfaces without one launch fresh.
 c11 restore 01KQ0XYZ…
-
-# Restore with cc session resume: each Claude Code surface re-spawns as
-# `cc --resume <claude.session_id>` via the Phase 1 restart registry.
-C11_SESSION_RESUME=1 c11 restore 01KQ0XYZ…
 ```
 
-The snapshot wraps a `WorkspaceApplyPlan`; the same shape Blueprints and the debug `c11 workspace apply` use. Explicit `SurfaceSpec.command` always wins over any registry synthesis — the registry only fires when a terminal surface has no command and its metadata declares a known `terminal_type`. See [`references/claude-resume.md`](references/claude-resume.md) for the full wire-up (the SessionStart hook operators paste into `~/.claude/settings.json`, the `C11_SESSION_RESUME` gate, troubleshooting).
+Conversation resume is on by default in 0.44.0+. The legacy `C11_SESSION_RESUME=1` opt-in and the standalone `AgentRestartRegistry` path remain in tree as the kill-switch fallback (`CMUX_DISABLE_CONVERSATION_STORE=1`); both are scheduled for removal in 0.46.0/v1.1. See the **Conversation primitives** section below for the live behaviour.
+
+The snapshot wraps a `WorkspaceApplyPlan`; the same shape Blueprints and the debug `c11 workspace apply` use. Explicit `SurfaceSpec.command` always wins over any registry synthesis — the registry only fires when a terminal surface has no command and its metadata declares a known `terminal_type`.
+
+## Conversation primitives
+
+c11 0.44.0+ owns a first-class **conversation store**: each surface hosts at most one active `ConversationRef` keyed by an opaque, per-kind id, persisted across c11 restarts. Per-TUI strategies (Claude Code, Codex, Opencode, Kimi today) capture and resume conversations using whatever signals each TUI exposes — hooks where available, on-disk file scrape as fallback.
+
+```bash
+# Read the active ref + can_resume + diagnostic_reason for the current surface
+c11 conversation get
+c11 conversation get --json
+
+# List captured conversations (process-wide; v1 has no per-workspace
+# partitioning — filter with --surface)
+c11 conversation list
+
+# Operator escape hatch: wipe the surface's conversations
+c11 conversation clear
+
+# Manual operator push (rarely used outside debugging)
+c11 conversation push --kind claude-code --id <uuid> --source manual
+
+# End the current conversation (operator-confirmed)
+c11 conversation tombstone --kind claude-code --id <uuid> --reason "ended"
+```
+
+**Surface resolution.** Every verb resolves `--surface` from `CMUX_SURFACE_ID` if unset. There is **no focused-surface fallback** — that path was the silent-misroute footgun the new architecture exists to fix. If the env var is missing and no flag was given, the command errors out cleanly.
+
+**When to reach for this.** Two main cases:
+
+1. *Debugging "why did this pane resume that session?"* Run `c11 conversation get` — `diagnostic_reason` explains the strategy's decision (`"matched cwd + mtime after claim"`, `"ambiguous: 3 candidates; chose newest"`, `"lifted from legacy claude.session_id metadata"`, etc).
+2. *Forcing a fresh launch on next restore.* `c11 conversation clear` wipes the surface's refs. The next workspace open won't auto-resume.
+
+**Explicit `/exit` does not auto-resume.** When Claude Code's SessionEnd hook fires (e.g., user typed `/exit`), the conversation transitions to `state=ended` which the store maps to `.unknown`; the resume strategy then `.skip`s on next launch. This is by design: explicit user exit is treated as "done with this conversation," distinct from `.suspended` (clean app shutdown) or a crash. To resume after `/exit`, restart the session manually and let the new conversation capture take over.
+
+For wrappers, hooks, and CLI authors: see [references/conversation.md](references/conversation.md) for the full verb table, lifecycle states, capture sources, ambiguity behaviour for hookless TUIs, and examples.
 
 ## Troubleshooting
 
@@ -613,6 +649,7 @@ If `c11` on your PATH does not resolve to the active bundle's CLI, run `c11 doct
 - **[references/orchestration.md](references/orchestration.md)** — multi-agent patterns: layout, tab naming, launching Claude Code sub-agents, agent-to-agent communication, sidebar reporting, writing c11-aware prompts
 - **[references/metadata.md](references/metadata.md)** — metadata deep dive: socket methods, precedence table, all canonical keys, sidecar sources, consumer patterns
 - **[references/claude-resume.md](references/claude-resume.md)** — Claude session resume: operator-installed SessionStart hook and the `C11_SESSION_RESUME` gate
+- **[references/conversation.md](references/conversation.md)** — conversation store: `c11 conversation` CLI surface, lifecycle states (alive | suspended | tombstoned | unknown | unsupported), capture sources, ambiguity policy for hookless TUIs (Codex), strategies, the wrapper-claim flow
 - **[../c11-browser/SKILL.md](../c11-browser/SKILL.md)** — c11 embedded browser automation
 - **[../c11-markdown/SKILL.md](../c11-markdown/SKILL.md)** — markdown surface viewer
 
