@@ -32,6 +32,14 @@ c11 set-metadata    --surface "$MY_SURF" --key task --value "<ticket-or-scope>" 
 
 The preamble runs before any other c11 write. If the resolution fails (empty `$MY_SURF`), the boot aborts with exit 99 rather than risk stomping the focused surface.
 
+**Ticket-bound roles (delegators, captains working a specific ticket) additionally bind the ticket to their surface** as part of the same preamble:
+
+```bash
+(cd "$REPO_ROOT" && lattice claim <TICKET-ID> --surface "$MY_SURF" --actor agent:<id>)
+```
+
+Run `claim` BEFORE `rename-tab`/`set-title` — claim auto-renames the tab to the ticket's short code + title, and the explicit role-title lines then override it. Always pass `--surface "$MY_SURF"` explicitly (claim's env-var default has the same empty-`$C11_SURFACE_ID` failure mode this HARD RULE exists to prevent). The binding lands on the ticket snapshot as `c11_surface`/`c11_workspace`, so the Orchestrator, Master Validator, and the board can answer "which pane is this ticket running in?" mechanically. Treat it as a liveness hint, not truth — surface IDs don't survive c11 restarts. `lattice unclaim <TICKET-ID>` releases the binding if the pane is being dissolved before the ticket reaches a terminal state.
+
 Apply this rule to: orchestrator boot, master validator boot, delegator boot, every sub-agent boot, captain boot. Anywhere a fresh c11 surface starts a fresh shell and needs to set its own identity.
 
 ### Protected operator surfaces
@@ -377,6 +385,7 @@ export LATTICE_ROOT=<absolute-repo-root>
 MY_SURF=\$(c11 identify --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["caller"]["surface_ref"])')
 test -n "\$MY_SURF" || { echo "FATAL: could not resolve own surface ref"; exit 99; }
 c11 set-agent       --surface "\$MY_SURF" --type claude-code --model claude-opus-4-7
+(cd \$REPO_ROOT && lattice claim <TICKET-ID> --surface "\$MY_SURF" --actor agent:<id>)   # bind ticket↔surface; BEFORE rename-tab (claim auto-renames, role-title below wins)
 c11 rename-tab      --surface "\$MY_SURF" "<TICKET-ID> Delegator"
 c11 set-title       --surface "\$MY_SURF" "<TICKET-ID> Delegator"
 c11 set-description --surface "\$MY_SURF" "Fast-track delegator for <TICKET-ID>. <one-line scope>."
@@ -418,6 +427,7 @@ export LATTICE_ROOT=<absolute-repo-root>
 MY_SURF=\$(c11 identify --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["caller"]["surface_ref"])')
 test -n "\$MY_SURF" || { echo "FATAL"; exit 99; }
 c11 set-agent       --surface "\$MY_SURF" --type claude-code --model claude-opus-4-7
+(cd \$REPO_ROOT && lattice claim <TICKET-ID> --surface "\$MY_SURF" --actor agent:<id>)   # bind ticket↔surface; BEFORE rename-tab (claim auto-renames, role-title below wins)
 c11 rename-tab      --surface "\$MY_SURF" "<TICKET-ID> Delegator"
 c11 set-title       --surface "\$MY_SURF" "<TICKET-ID> Delegator"
 c11 set-description --surface "\$MY_SURF" "Inline-full delegator for <TICKET-ID>. <one-line scope>. Headless lattice reviews."
@@ -491,6 +501,7 @@ You are the Delegator for <TICKET-ID> — <title>.
 Identity:
   - c11 set-agent --type claude-code --model claude-opus-4-7
   - Resolve surface ref: `MY_SURF=\$(c11 identify --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["caller"]["surface_ref"])')` (see HARD RULE 0)
+  - Bind ticket↔surface: `(cd <REPO_ROOT> && lattice claim <TICKET-ID> --surface "\$MY_SURF" --actor agent:<id>)` — BEFORE rename-tab (claim auto-renames; your role-title wins)
   - c11 rename-tab --surface "\$MY_SURF" "<TICKET-ID> Delegator" + c11 set-title --surface "\$MY_SURF" "<TICKET-ID> Delegator"
   - 3-line description: parent context / this ticket / current phase.
 
