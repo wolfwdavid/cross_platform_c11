@@ -11,7 +11,7 @@
   "plan_approval": "auto",
   "plan_review_mode": "triple",
   "project_code": "C11",
-  "project_name": "cmux",
+  "project_name": "c11",
   "review_mode": "inline",
   "review_timeout_seconds": 600,
   "schema_version": 1,
