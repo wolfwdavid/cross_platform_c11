@@ -36,6 +36,19 @@ c11's value to an agent is **the skill** — `skills/c11/SKILL.md` plus the peer
 
 **Therefore:** every change to the CLI, socket protocol, metadata schema, or surface model is incomplete until the skill is updated to match. If you add a command, add it to the skill. If you rename a command, rename it in the skill. If you change defaults, update the examples. The skill is the contract; let it rot and agents get worse at using c11. Invest there first, not last.
 
+### Editing a skill source is incomplete until the installed copy is synced (HARD RULE)
+
+c11 installs its skills (Settings → Agent Skills) as **one-time copies** into `~/.claude/skills/<name>/`, each stamped with a `.c11-skill.json` marker. **The app does not track the repo source after install.** So editing — or committing — a skill under `skills/` does *nothing* to the copy an agent actually loads on any machine where that skill is already installed. The committed source and the live skill are two different files; fixing one leaves the other stale. This has bitten us before: a fix lands in `skills/c11/SKILL.md`, the commit is green, and agents keep reading the old wording for weeks because nobody refreshed the install.
+
+**Whenever you edit any installable skill** (`c11`, `c11-browser`, `c11-markdown`, `c11-debug-windows`, `lattice-orchestrator` — see `skills/MANIFEST.json`), the change is not done until you run:
+
+```bash
+scripts/sync-installed-skills.sh            # refresh every installed installable skill from source
+scripts/sync-installed-skills.sh c11        # or just one
+```
+
+The script mirrors `skills/<name>/` → `~/.claude/skills/<name>/` (preserving the app's `.c11-skill.json` marker) and is idempotent. Treat it as the skill-editing equivalent of `reload.sh` after a code change: source edit → commit → **sync** → verify the live copy. A skill PR that updates source without the maintainer syncing their own machine ships a fix that isn't actually live for them.
+
 ## Computer use is a maintainer validation skill, not the c11 operating skill
 
 There are two different genres here; do not blur them:
