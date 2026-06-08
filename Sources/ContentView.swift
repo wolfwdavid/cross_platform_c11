@@ -11396,30 +11396,22 @@ private struct TabItemView: View, Equatable {
         explicitRailColor != nil
     }
 
+    // The selected workspace is conveyed by one consistent signal in every
+    // indicator style: a thick white outline. Custom-colored workspaces keep
+    // their color as a rail (.leftRail) or fill (.solidFill) for identity, but
+    // selection itself is always the white outline.
     private var activeBorderLineWidth: CGFloat {
-        switch activeTabIndicatorStyle {
-        case .leftRail:
-            return 0
-        case .solidFill:
-            guard isActive else { return 0 }
-            return hasActiveCustomColorFill ? 1.5 : 1.0
-        }
+        isActive ? 2.5 : 0
     }
 
     private var activeBorderColor: Color {
-        guard isActive else { return .clear }
-        switch activeTabIndicatorStyle {
-        case .leftRail:
-            return .clear
-        case .solidFill:
-            return hasActiveCustomColorFill ? BrandColors.blackSwiftUI : BrandColors.goldSwiftUI
-        }
+        isActive ? BrandColors.whiteSwiftUI : .clear
     }
 
     // When a workspace has a custom color and is selected in .solidFill mode,
     // the fill stays the workspace color (subconsciously reinforcing which
-    // workspace you're in) and emphasis comes from a black outline instead of
-    // swapping the fill to black.
+    // workspace you're in) and emphasis comes from the white outline above
+    // instead of swapping the fill to black.
     private var hasActiveCustomColorFill: Bool {
         isActive && activeTabIndicatorStyle == .solidFill && resolvedCustomTabColor != nil
     }
@@ -12231,11 +12223,11 @@ private struct TabItemView: View, Equatable {
 
     private var explicitRailColor: Color? {
         guard activeTabIndicatorStyle == .leftRail else { return nil }
+        // The custom color shows as a rail for identity (whether selected or
+        // not). Selection itself is the white outline (see activeBorderColor),
+        // so there is no gold selection rail for uncolored workspaces.
         if let custom = resolvedCustomTabColor {
             return custom.opacity(0.95)
-        }
-        if isActive {
-            return BrandColors.goldSwiftUI
         }
         return nil
     }
