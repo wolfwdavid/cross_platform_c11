@@ -11397,29 +11397,41 @@ private struct TabItemView: View, Equatable {
     }
 
     private var activeBorderLineWidth: CGFloat {
+        // A selected workspace carrying a custom color gets a thick white outline
+        // in every indicator style. The custom fill (.solidFill) or custom rail
+        // (.leftRail) otherwise makes a selected custom-colored workspace nearly
+        // indistinguishable from an unselected one.
+        if isActiveCustomColor { return 2.5 }
         switch activeTabIndicatorStyle {
         case .leftRail:
             return 0
         case .solidFill:
-            guard isActive else { return 0 }
-            return hasActiveCustomColorFill ? 1.5 : 1.0
+            return isActive ? 1.0 : 0
         }
     }
 
     private var activeBorderColor: Color {
         guard isActive else { return .clear }
+        if isActiveCustomColor { return BrandColors.whiteSwiftUI }
         switch activeTabIndicatorStyle {
         case .leftRail:
             return .clear
         case .solidFill:
-            return hasActiveCustomColorFill ? BrandColors.blackSwiftUI : BrandColors.goldSwiftUI
+            return BrandColors.goldSwiftUI
         }
+    }
+
+    // A selected workspace with a custom color, in any indicator style. Drives
+    // the thick white selection outline so the active custom-colored workspace
+    // reads as clearly selected.
+    private var isActiveCustomColor: Bool {
+        isActive && resolvedCustomTabColor != nil
     }
 
     // When a workspace has a custom color and is selected in .solidFill mode,
     // the fill stays the workspace color (subconsciously reinforcing which
-    // workspace you're in) and emphasis comes from a black outline instead of
-    // swapping the fill to black.
+    // workspace you're in) and emphasis comes from the white outline above
+    // instead of swapping the fill to black.
     private var hasActiveCustomColorFill: Bool {
         isActive && activeTabIndicatorStyle == .solidFill && resolvedCustomTabColor != nil
     }
