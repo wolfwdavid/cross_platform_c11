@@ -16,10 +16,11 @@ final class ConversationStrategyTests: XCTestCase {
 
     // MARK: - Registry
 
-    func testV1RegistryContainsTheFourKinds() {
+    func testV1RegistryContainsTheBuiltInKinds() {
         let r = ConversationStrategyRegistry.v1
         XCTAssertNotNil(r.strategy(forKind: "claude-code"))
         XCTAssertNotNil(r.strategy(forKind: "codex"))
+        XCTAssertNotNil(r.strategy(forKind: "grok"))
         XCTAssertNotNil(r.strategy(forKind: "opencode"))
         XCTAssertNotNil(r.strategy(forKind: "kimi"))
         XCTAssertNil(r.strategy(forKind: "cursor"))
@@ -269,6 +270,43 @@ final class ConversationStrategyTests: XCTestCase {
         }
         XCTAssertEqual(text, "'kimi'")
         XCTAssertTrue(submit)
+    }
+
+    // MARK: - Grok strategy
+
+    func testGrokAliveTypesBestEffortResume() {
+        let strategy = GrokStrategy()
+        let ref = ConversationRef(
+            kind: "grok",
+            id: "real-id",
+            placeholder: false,
+            capturedAt: Date(),
+            capturedVia: .hook,
+            state: .alive
+        )
+        guard case .typeCommand(let text, let submit) = strategy.resume(ref: ref) else {
+            XCTFail("expected typeCommand")
+            return
+        }
+        XCTAssertEqual(text, "grok --always-approve --resume")
+        XCTAssertTrue(submit)
+    }
+
+    func testGrokPlaceholderResumeSkips() {
+        let strategy = GrokStrategy()
+        let ref = ConversationRef(
+            kind: "grok",
+            id: "wrapper-claim:foo",
+            placeholder: true,
+            capturedAt: Date(),
+            capturedVia: .wrapperClaim,
+            state: .unknown
+        )
+        guard case .skip(let reason) = strategy.resume(ref: ref) else {
+            XCTFail("expected skip")
+            return
+        }
+        XCTAssertEqual(reason, "fresh-launch-only")
     }
 
     // MARK: - Shell-quoting helper
