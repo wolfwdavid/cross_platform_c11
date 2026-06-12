@@ -288,6 +288,53 @@ final class WindowBrowserHostView: NSView {
     private var cachedSidebarDividerX: CGFloat?
     private var sidebarDividerMissCount = 0
     private var trackingArea: NSTrackingArea?
+
+    // Per-slot cache of the resolved hosted-inspector divider candidate.
+    // hostedInspectorDividerHit(at:) runs from hitTest on every pointer event;
+    // without the cache it re-walks the slot's entire descendant tree each time
+    // (20-50+ views with DevTools attached). A `hit: nil` entry is a cached
+    // negative ("scanned, no inspector here") — the common case for slots
+    // without DevTools. Entries are invalidated on slot hierarchy changes
+    // (didAddSubview/willRemoveSubview — docked DevTools attach as direct slot
+    // children), slot layout, and the reapply paths, and positive hits are
+    // cheaply revalidated before use.
+    private struct HostedInspectorCandidateCacheEntry {
+        weak var slotView: WindowBrowserSlotView?
+        var hit: HostedInspectorDividerHit?
+    }
+
+    private var hostedInspectorCandidateCache: [ObjectIdentifier: HostedInspectorCandidateCacheEntry] = [:]
+
+    fileprivate func invalidateHostedInspectorCandidateCache(for slot: WindowBrowserSlotView) {
+        hostedInspectorCandidateCache.removeValue(forKey: ObjectIdentifier(slot))
+    }
+
+    private func cachedHostedInspectorDividerCandidate(in slot: WindowBrowserSlotView) -> HostedInspectorDividerHit? {
+        let key = ObjectIdentifier(slot)
+        if let entry = hostedInspectorCandidateCache[key], entry.slotView === slot {
+            if let hit = entry.hit {
+                if Self.isHostedInspectorDividerHitStillValid(hit) {
+                    return hit
+                }
+                // Stale positive: fall through to a fresh scan.
+            } else {
+                return nil
+            }
+        }
+        let hit = hostedInspectorDividerCandidate(in: slot)
+        hostedInspectorCandidateCache[key] = HostedInspectorCandidateCacheEntry(slotView: slot, hit: hit)
+        return hit
+    }
+
+    private static func isHostedInspectorDividerHitStillValid(_ hit: HostedInspectorDividerHit) -> Bool {
+        hit.inspectorView.window != nil &&
+            hit.pageView.window != nil &&
+            hit.inspectorView.isDescendant(of: hit.slotView) &&
+            hit.pageView.isDescendant(of: hit.slotView) &&
+            hit.pageView.superview === hit.containerView &&
+            hit.inspectorView.superview != nil &&
+            isVisibleHostedInspectorCandidate(hit.inspectorView)
+    }
     private var activeDividerCursorKind: DividerCursorKind?
     private var hostedInspectorDividerDrag: HostedInspectorDividerDragState?
     private var lastHostedInspectorLayoutBoundsSize: NSSize?
@@ -374,11 +421,20 @@ final class WindowBrowserHostView: NSView {
         slot.onHostedInspectorLayout = { [weak self] slotView in
             self?.reapplyHostedInspectorDividerIfNeeded(in: slotView, reason: "slot.layout")
         }
+        // Docked DevTools attach/detach lands as a direct subview change on the
+        // slot (the page web view is pinned straight to it). Drop the slot's
+        // cached divider candidate so the next hit test rescans.
+        slot.onHierarchyChanged = { [weak self] slotView in
+            self?.invalidateHostedInspectorCandidateCache(for: slotView)
+        }
+        invalidateHostedInspectorCandidateCache(for: slot)
     }
 
     override func willRemoveSubview(_ subview: NSView) {
         if let slot = subview as? WindowBrowserSlotView {
             slot.onHostedInspectorLayout = nil
+            slot.onHierarchyChanged = nil
+            invalidateHostedInspectorCandidateCache(for: slot)
         }
         super.willRemoveSubview(subview)
     }
@@ -433,10 +489,31 @@ final class WindowBrowserHostView: NSView {
         clearActiveDividerCursor(restoreArrow: true)
     }
 
+    // Called on every event, including keyboard. Divider scans, cursor updates,
+    // and pass-through routing are pointer-only; keep the non-pointer path
+    // minimal. Do not add work outside the isPointerEvent guard.
+    // (Mirrors WindowTerminalHostView.hitTest.)
     override func hitTest(_ point: NSPoint) -> NSView? {
+        let isPointerEvent: Bool
+        switch NSApp.currentEvent?.type {
+        case .mouseMoved, .mouseEntered, .mouseExited,
+             .leftMouseDown, .leftMouseUp, .leftMouseDragged,
+             .rightMouseDown, .rightMouseUp, .rightMouseDragged,
+             .otherMouseDown, .otherMouseUp, .otherMouseDragged,
+             .scrollWheel, .cursorUpdate:
+            isPointerEvent = true
+        default:
+            isPointerEvent = false
+        }
+        guard isPointerEvent else {
+            // Non-pointer event: skip divider/drag routing, just do standard hit testing.
+            let hitView = super.hitTest(point)
+            return hitView === self ? nil : hitView
+        }
+
         let dividerHit = splitDividerHit(at: point)
         let hostedInspectorHit = dividerHit == nil ? hostedInspectorDividerHit(at: point) : nil
-        updateDividerCursor(at: point, dividerHit: dividerHit, hostedInspectorHit: hostedInspectorHit)
+        updateDividerCursor(at: point, resolvedDividerHit: dividerHit, resolvedHostedInspectorHit: hostedInspectorHit)
 
         let titlebarPassThrough = shouldPassThroughToTitlebar(at: point)
         let sidebarPassThrough = shouldPassThroughToSidebarResizer(
@@ -613,8 +690,8 @@ final class WindowBrowserHostView: NSView {
         )
         updateDividerCursor(
             at: convert(event.locationInWindow, from: nil),
-            dividerHit: nil,
-            hostedInspectorHit: HostedInspectorDividerHit(
+            resolvedDividerHit: nil,
+            resolvedHostedInspectorHit: HostedInspectorDividerHit(
                 slotView: dragState.slotView,
                 containerView: dragState.containerView,
                 pageView: dragState.pageView,
@@ -737,13 +814,25 @@ final class WindowBrowserHostView: NSView {
         return point.x >= regionMinX && point.x <= regionMaxX
     }
 
+    private func updateDividerCursor(at point: NSPoint) {
+        let resolvedDividerHit = splitDividerHit(at: point)
+        let resolvedHostedInspectorHit = resolvedDividerHit == nil ? hostedInspectorDividerHit(at: point) : nil
+        updateDividerCursor(
+            at: point,
+            resolvedDividerHit: resolvedDividerHit,
+            resolvedHostedInspectorHit: resolvedHostedInspectorHit
+        )
+    }
+
+    // Trusts the caller's resolved hits verbatim — a caller-computed nil is a
+    // real "no hit", not a request to re-scan. (The previous `hit ?? rescan`
+    // contract re-ran the per-slot descendant scan on every pointer event in
+    // the common no-inspector case, doubling hitTest's divider cost.)
     private func updateDividerCursor(
         at point: NSPoint,
-        dividerHit: DividerHit? = nil,
-        hostedInspectorHit: HostedInspectorDividerHit? = nil
+        resolvedDividerHit: DividerHit?,
+        resolvedHostedInspectorHit: HostedInspectorDividerHit?
     ) {
-        let resolvedDividerHit = dividerHit ?? splitDividerHit(at: point)
-        let resolvedHostedInspectorHit = resolvedDividerHit == nil ? (hostedInspectorHit ?? hostedInspectorDividerHit(at: point)) : nil
         if shouldPassThroughToSidebarResizer(
             at: point,
             dividerHit: resolvedDividerHit,
@@ -844,7 +933,7 @@ final class WindowBrowserHostView: NSView {
         for slot in visibleSlots {
             let pointInSlot = slot.convert(point, from: self)
             guard slot.bounds.contains(pointInSlot),
-                  let hit = hostedInspectorDividerCandidate(in: slot) else {
+                  let hit = cachedHostedInspectorDividerCandidate(in: slot) else {
                 continue
             }
 
@@ -857,8 +946,11 @@ final class WindowBrowserHostView: NSView {
     }
 
     private func hostedInspectorDividerCandidate(in slot: WindowBrowserSlotView) -> HostedInspectorDividerHit? {
-        let inspectorCandidates = Self.visibleDescendants(in: slot)
-            .filter { Self.isVisibleHostedInspectorCandidate($0) && Self.isInspectorView($0) }
+        // Reached only on cache miss/invalidation (see
+        // cachedHostedInspectorDividerCandidate). A stream of these per pointer
+        // move in /tmp/c11-portal.log means the cache is not holding.
+        portalLog("browser.inspectorScan", "slot=\(portalLogToken(slot))")
+        let inspectorCandidates = Self.collectVisibleInspectorCandidates(in: slot)
             .sorted { lhs, rhs in
                 let lhsFrame = slot.convert(lhs.bounds, from: lhs)
                 let rhsFrame = slot.convert(rhs.bounds, from: rhs)
@@ -980,7 +1072,11 @@ final class WindowBrowserHostView: NSView {
             return false
         }
         guard let preferredWidth = slot.resolvedPreferredHostedInspectorWidth(in: slot.bounds) else { return false }
-        guard let hit = hostedInspectorDividerCandidate(in: slot) else { return false }
+        // Layout/sync churn can rearrange the slot's subtree without tripping the
+        // cheap validity check (same views, different frames/dock side). Rescan
+        // here and let the fresh result repopulate the cache for the hit-test path.
+        invalidateHostedInspectorCandidateCache(for: slot)
+        guard let hit = cachedHostedInspectorDividerCandidate(in: slot) else { return false }
         let oldPageFrame = hit.pageView.frame
         let oldInspectorFrame = hit.inspectorView.frame
         _ = applyHostedInspectorDividerWidth(
@@ -1126,14 +1222,23 @@ final class WindowBrowserHostView: NSView {
             abs(lhs.height - rhs.height) <= epsilon
     }
 
-    private static func visibleDescendants(in root: NSView) -> [NSView] {
-        var descendants: [NSView] = []
+    /// Collect visible WKInspector* candidate views under `root`, pruning each
+    /// matched view's subtree. Nested inspector views resolve to the same
+    /// top-level container pair via the upward walk in
+    /// `hostedInspectorDividerCandidate(in:startingAt:)` (bestHit is overwritten
+    /// up to the highest container with a valid page sibling), so descending
+    /// into a match only re-derives the same hit.
+    private static func collectVisibleInspectorCandidates(in root: NSView) -> [NSView] {
+        var candidates: [NSView] = []
         var stack = Array(root.subviews.reversed())
         while let view = stack.popLast() {
-            descendants.append(view)
+            if isVisibleHostedInspectorCandidate(view), isInspectorView(view) {
+                candidates.append(view)
+                continue
+            }
             stack.append(contentsOf: view.subviews.reversed())
         }
-        return descendants
+        return candidates
     }
 
     private static func isInspectorView(_ view: NSView) -> Bool {
@@ -1603,8 +1708,17 @@ final class WindowBrowserSlotView: NSView {
     private var preferredHostedInspectorWidthFraction: CGFloat?
     fileprivate var isHostedInspectorDividerDragActive = false
     var onHostedInspectorLayout: ((WindowBrowserSlotView) -> Void)?
+    // Fired on direct subview add/remove. The host uses this to invalidate its
+    // per-slot inspector-divider candidate cache (docked DevTools attach/detach
+    // is a direct subview change here).
+    var onHierarchyChanged: ((WindowBrowserSlotView) -> Void)?
     fileprivate var isApplyingHostedInspectorLayout = false
     private var lastHostedInspectorLayoutBoundsSize: NSSize?
+
+    override func willRemoveSubview(_ subview: NSView) {
+        super.willRemoveSubview(subview)
+        onHierarchyChanged?(self)
+    }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -1921,6 +2035,7 @@ final class WindowBrowserSlotView: NSView {
 
     override func didAddSubview(_ subview: NSView) {
         super.didAddSubview(subview)
+        onHierarchyChanged?(self)
         guard subview !== paneDropTargetView else { return }
         bringInteractionLayersToFrontIfNeeded()
     }
