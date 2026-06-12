@@ -2086,6 +2086,11 @@ final class WindowBrowserPortal: NSObject {
     private weak var installedReferenceView: NSView?
     private var hasDeferredFullSyncScheduled = false
     private var hasExternalGeometrySyncScheduled = false
+    // Web views needing a deferred re-sync on the next scheduled tick. Mirrors
+    // TerminalWindowPortal.dirtyHostedIds: the deferred pass touches only entries
+    // marked here, so unrelated browsers don't re-sync (and re-render) on every
+    // anchor-geometry callback in a multi-browser workspace.
+    private var dirtyWebViewIds: Set<ObjectIdentifier> = []
     private var geometryObservers: [NSObjectProtocol] = []
 
     private struct Entry {
@@ -2151,7 +2156,7 @@ final class WindowBrowserPortal: NSObject {
             queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated {
-                self?.scheduleExternalGeometrySynchronize()
+                self?.scheduleExternalGeometrySynchronize(trigger: "windowDidResize")
             }
         })
         geometryObservers.append(center.addObserver(
@@ -2160,7 +2165,7 @@ final class WindowBrowserPortal: NSObject {
             queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated {
-                self?.scheduleExternalGeometrySynchronize()
+                self?.scheduleExternalGeometrySynchronize(trigger: "windowDidEndLiveResize")
             }
         })
         geometryObservers.append(center.addObserver(
@@ -2177,7 +2182,7 @@ final class WindowBrowserPortal: NSObject {
                           window: window,
                           hostView: self.hostView
                       ) else { return }
-                self.scheduleExternalGeometrySynchronize()
+                self.scheduleExternalGeometrySynchronize(trigger: "splitViewDidResize")
             }
         })
     }
@@ -2189,18 +2194,36 @@ final class WindowBrowserPortal: NSObject {
         geometryObservers.removeAll()
     }
 
-    private func scheduleExternalGeometrySynchronize() {
+    private func scheduleExternalGeometrySynchronize(trigger: String) {
         guard !hasExternalGeometrySyncScheduled else { return }
         hasExternalGeometrySyncScheduled = true
+        // Outside live resize / divider drags, defer one extra runloop turn so
+        // SwiftUI/AppKit layout settles before the sync pass — otherwise the pass
+        // reads mid-flight frames and a follow-up notification re-runs it, doubling
+        // the per-change sync cost. Mirrors TerminalWindowPortal's twin.
+        let isDragEvent = TerminalWindowPortalRegistry.isInteractiveGeometryResizeActive
+        let requiresSettledLayout = !(hostView.inLiveResize || window?.inLiveResize == true || isDragEvent)
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            self.hasExternalGeometrySyncScheduled = false
-            self.synchronizeAllEntriesFromExternalGeometryChange()
+            let performSync = {
+                self.hasExternalGeometrySyncScheduled = false
+                self.synchronizeAllEntriesFromExternalGeometryChange(trigger: trigger)
+            }
+            if requiresSettledLayout {
+                DispatchQueue.main.async(execute: performSync)
+            } else {
+                performSync()
+            }
         }
     }
 
-    private func synchronizeAllEntriesFromExternalGeometryChange() {
+    private func synchronizeAllEntriesFromExternalGeometryChange(trigger: String) {
         guard ensureInstalled() else { return }
+        portalLog("browser.geom.external",
+            "windowNumber=\(window?.windowNumber ?? -1) " +
+            "trigger=\(trigger) " +
+            "entryCount=\(entriesByWebViewId.count)"
+        )
         installedContainerView?.layoutSubtreeIfNeeded()
         installedReferenceView?.layoutSubtreeIfNeeded()
         hostView.superview?.layoutSubtreeIfNeeded()
@@ -2259,6 +2282,10 @@ final class WindowBrowserPortal: NSObject {
             } else {
                 anchorWindowDesc = "other"
             }
+            portalLog("browser.orphan.hide",
+                "webViewId=\(portalLogToken(webViewId)) " +
+                "anchor=\(portalLogToken(anchor)) anchorWindow=\(anchorWindowDesc)"
+            )
 #if DEBUG
             dlog(
                 "browser.portal.orphan.hide web=\(browserPortalDebugToken(entry.webView)) " +
@@ -2793,9 +2820,15 @@ final class WindowBrowserPortal: NSObject {
 
     func detachWebView(withId webViewId: ObjectIdentifier) {
         guard let entry = entriesByWebViewId.removeValue(forKey: webViewId) else { return }
+        dirtyWebViewIds.remove(webViewId)
         if let anchor = entry.anchorView {
             webViewByAnchorId.removeValue(forKey: ObjectIdentifier(anchor))
         }
+        portalLog("browser.detach",
+            "webViewId=\(portalLogToken(webViewId)) " +
+            "anchorId=\(portalLogToken(entry.anchorView.map(ObjectIdentifier.init))) " +
+            "entryCount=\(entriesByWebViewId.count)"
+        )
 #if DEBUG
         let hadContainerSuperview = (entry.containerView?.superview === hostView) ? 1 : 0
         let hadWebSuperview = entry.webView?.superview == nil ? 0 : 1
@@ -2943,6 +2976,14 @@ final class WindowBrowserPortal: NSObject {
         let webViewId = ObjectIdentifier(webView)
         let anchorId = ObjectIdentifier(anchorView)
         let previousEntry = entriesByWebViewId[webViewId]
+        portalLog("browser.bind.before",
+            "webViewId=\(portalLogToken(webViewId)) " +
+            "anchorId=\(portalLogToken(anchorId)) " +
+            "anchorWindowNumber=\(anchorView.window?.windowNumber ?? -1) " +
+            "visibleInUI=\(visibleInUI ? 1 : 0) " +
+            "prevAnchorId=\(portalLogToken(previousEntry?.anchorView.map(ObjectIdentifier.init))) " +
+            "entryCount=\(entriesByWebViewId.count)"
+        )
         let containerView = ensureContainerView(
             for: previousEntry ?? Entry(
                 webView: nil,
@@ -3070,7 +3111,19 @@ final class WindowBrowserPortal: NSObject {
             source: "bind",
             forcePresentationRefresh: didChangeAnchor
         )
+        // Re-check this web view on the next tick — the bind just reparented/resized
+        // it and ancestor layout may still settle. Other entries are unaffected.
+        dirtyWebViewIds.insert(webViewId)
+        scheduleDeferredFullSynchronizeAll()
         pruneDeadEntries()
+
+        portalLog("browser.bind.after",
+            "webViewId=\(portalLogToken(webViewId)) " +
+            "anchorId=\(portalLogToken(anchorId)) " +
+            "seededFrame=\(portalLogFrame(containerView.frame)) " +
+            "containerInHostView=\(containerView.superview === hostView ? 1 : 0) " +
+            "entryCount=\(entriesByWebViewId.count)"
+        )
     }
 
     func synchronizeWebViewForAnchor(_ anchorView: NSView) {
@@ -3082,6 +3135,11 @@ final class WindowBrowserPortal: NSObject {
         }
 
         synchronizeAllWebViews(excluding: primaryWebViewId, source: "anchorSecondary")
+        // Only the primary web view (whose anchor moved) needs a deferred re-check
+        // after layout settles; the others were just synchronized inline above.
+        if let primaryWebViewId {
+            dirtyWebViewIds.insert(primaryWebViewId)
+        }
         scheduleDeferredFullSynchronizeAll()
     }
 
@@ -3094,10 +3152,39 @@ final class WindowBrowserPortal: NSObject {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.hasDeferredFullSyncScheduled = false
+            self.runDeferredWebViewSync()
+        }
+    }
+
+    /// Body of the deferred sync. Iterates only entries marked dirty since the
+    /// schedule call; skips entirely when nothing's dirty. Re-entrant marks added
+    /// during iteration (e.g., transient-recovery retries) re-arm a fresh deferred
+    /// via the schedule call, so they're handled on the next tick rather than in
+    /// the current sweep. Mirrors TerminalWindowPortal.runDeferredHostedSync.
+    private func runDeferredWebViewSync() {
+        guard ensureInstalled() else {
+            dirtyWebViewIds.removeAll(keepingCapacity: true)
+            return
+        }
+        let snapshot = dirtyWebViewIds
+        dirtyWebViewIds.removeAll(keepingCapacity: true)
+        guard !snapshot.isEmpty else {
+            portalLog("browser.deferredSync.skip", "count=0")
+            return
+        }
+        portalLog("browser.deferredSync.run",
+            "count=\(snapshot.count) entryCount=\(entriesByWebViewId.count)"
+        )
 #if DEBUG
-            dlog("browser.portal.sync.defer.tick entries=\(self.entriesByWebViewId.count)")
+        dlog("browser.portal.sync.defer.tick dirty=\(snapshot.count) entries=\(entriesByWebViewId.count)")
 #endif
-            self.synchronizeAllWebViews(excluding: nil, source: "deferredTick")
+        pruneDeadEntries()
+        for webViewId in snapshot {
+            // Skip ids that no longer correspond to a live entry (detached between
+            // schedule and run). synchronizeWebView would no-op anyway, but skipping
+            // here avoids the lookup churn.
+            guard entriesByWebViewId[webViewId] != nil else { continue }
+            synchronizeWebView(withId: webViewId, source: "deferredTick")
         }
     }
 
@@ -3147,6 +3234,9 @@ final class WindowBrowserPortal: NSObject {
         )
 #endif
         if entry.transientRecoveryRetriesRemaining > 0 {
+            // Retry only the entry whose recovery is in flight; other entries aren't
+            // affected by this transient-recovery cycle.
+            dirtyWebViewIds.insert(webViewId)
             scheduleDeferredFullSynchronizeAll()
         }
         return true
@@ -3372,6 +3462,8 @@ final class WindowBrowserPortal: NSObject {
                     reason: "hostBoundsNotReady"
                 )
             } else {
+                // Retry only this web view on the next tick once host bounds settle.
+                dirtyWebViewIds.insert(webViewId)
                 scheduleDeferredFullSynchronizeAll()
             }
             containerView.setPaneTopChromeHeight(0)
@@ -3639,6 +3731,15 @@ final class WindowBrowserPortal: NSObject {
             _ = hostView.reapplyHostedInspectorDividerIfNeeded(in: containerView, reason: "portal.sync.postRefresh")
         }
         ensureChromeOverlayOnTop()
+        portalLog("browser.sync.result",
+            "webViewId=\(portalLogToken(webViewId)) " +
+            "source=\(source) " +
+            "oldFrame=\(portalLogFrame(oldFrame)) " +
+            "targetFrame=\(portalLogFrame(targetFrame)) " +
+            "shouldHide=\(shouldHide ? 1 : 0) " +
+            "containerHidden=\(containerView.isHidden ? 1 : 0) " +
+            "entryCount=\(entriesByWebViewId.count)"
+        )
 #if DEBUG
         dlog(
             "browser.portal.sync.result web=\(browserPortalDebugToken(webView)) source=\(source) " +
