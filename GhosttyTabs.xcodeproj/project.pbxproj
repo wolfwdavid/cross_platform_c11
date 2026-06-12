@@ -26,6 +26,7 @@
 		1BA5C5B28E1CE348469E1778 /* MetadataStoreRevisionCounterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7009BF1A1B2C3D4E5F60718 /* MetadataStoreRevisionCounterTests.swift */; };
 		1D57711F82EF7A25FB6FEA23 /* Codex.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE1C8E6BE23CECF1DA9531BA /* Codex.swift */; };
 		F60C0DEA00000000000C0001 /* Grok.swift in Sources */ = {isa = PBXBuildFile; fileRef = F60C0DEA00000000000C0002 /* Grok.swift */; };
+		F60C0DEA00000000000C0101 /* GitHubCopilot.swift in Sources */ = {isa = PBXBuildFile; fileRef = F60C0DEA00000000000C0102 /* GitHubCopilot.swift */; };
 		1D765B8279AE9949576A5FE1 /* WorkspaceSnapshotBrowserMarkdownRoundTripTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8016BF1A1B2C3D4E5F60718 /* WorkspaceSnapshotBrowserMarkdownRoundTripTests.swift */; };
 		1E77E8B74098A7D7B928631C /* SurfaceActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8A815208E655A7AFBCEE667 /* SurfaceActivity.swift */; };
 		1F14445B9627DE9D3AF4FD2E /* BrowserPanelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58C7B1B978620BE162CC057E /* BrowserPanelTests.swift */; };
@@ -562,6 +563,7 @@
 		AD94535AC5F0BF88B5CDEDDF /* ClaudeCodeScraper.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ClaudeCodeScraper.swift; path = Conversation/Scrapers/ClaudeCodeScraper.swift; sourceTree = "<group>"; };
 		AE1C8E6BE23CECF1DA9531BA /* Codex.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Codex.swift; path = Conversation/Strategies/Codex.swift; sourceTree = "<group>"; };
 		F60C0DEA00000000000C0002 /* Grok.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Grok.swift; path = Conversation/Strategies/Grok.swift; sourceTree = "<group>"; };
+		F60C0DEA00000000000C0102 /* GitHubCopilot.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = GitHubCopilot.swift; path = Conversation/Strategies/GitHubCopilot.swift; sourceTree = "<group>"; };
 		B09C007F42697761B5F1A2AB /* OmnibarAndToolsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OmnibarAndToolsTests.swift; sourceTree = "<group>"; };
 		B2E7294509CC42FE9191870E /* xterm-ghostty */ = {isa = PBXFileReference; lastKnownFileType = file; path = "ghostty/terminfo/78/xterm-ghostty"; sourceTree = "<group>"; };
 		B8F266256A1A3D9A45BD840F /* SidebarHelpMenuUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarHelpMenuUITests.swift; sourceTree = "<group>"; };
@@ -998,6 +1000,7 @@
 				CC1299AE998DF9F78A383294 /* ClaudeCode.swift */,
 				AE1C8E6BE23CECF1DA9531BA /* Codex.swift */,
 				F60C0DEA00000000000C0002 /* Grok.swift */,
+				F60C0DEA00000000000C0102 /* GitHubCopilot.swift */,
 				E2BDE4F4D562EC49C639CF86 /* Kimi.swift */,
 				54017DD4C9F6BE7CFA98C2F7 /* Opencode.swift */,
 				AD94535AC5F0BF88B5CDEDDF /* ClaudeCodeScraper.swift */,
@@ -1630,6 +1633,7 @@
 				20A2EC594F0DF1560BB0E28E /* ClaudeCode.swift in Sources */,
 				1D57711F82EF7A25FB6FEA23 /* Codex.swift in Sources */,
 				F60C0DEA00000000000C0001 /* Grok.swift in Sources */,
+				F60C0DEA00000000000C0101 /* GitHubCopilot.swift in Sources */,
 				A7EA137511C5D411B2960587 /* Kimi.swift in Sources */,
 				60785E8E82CF86BCF4A26738 /* Opencode.swift in Sources */,
 				767FF8ADAC0F182A4534E12B /* ClaudeCodeScraper.swift in Sources */,

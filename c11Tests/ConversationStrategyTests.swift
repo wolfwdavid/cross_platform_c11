@@ -23,6 +23,7 @@ final class ConversationStrategyTests: XCTestCase {
         XCTAssertNotNil(r.strategy(forKind: "grok"))
         XCTAssertNotNil(r.strategy(forKind: "opencode"))
         XCTAssertNotNil(r.strategy(forKind: "kimi"))
+        XCTAssertNotNil(r.strategy(forKind: "github-copilot"))
         XCTAssertNil(r.strategy(forKind: "cursor"))
     }
 
@@ -296,6 +297,43 @@ final class ConversationStrategyTests: XCTestCase {
         let strategy = GrokStrategy()
         let ref = ConversationRef(
             kind: "grok",
+            id: "wrapper-claim:foo",
+            placeholder: true,
+            capturedAt: Date(),
+            capturedVia: .wrapperClaim,
+            state: .unknown
+        )
+        guard case .skip(let reason) = strategy.resume(ref: ref) else {
+            XCTFail("expected skip")
+            return
+        }
+        XCTAssertEqual(reason, "fresh-launch-only")
+    }
+
+    // MARK: - GitHub Copilot strategy
+
+    func testGitHubCopilotAliveTypesShellQuotedCommand() {
+        let strategy = GitHubCopilotStrategy()
+        let ref = ConversationRef(
+            kind: "github-copilot",
+            id: "real-id",
+            placeholder: false,
+            capturedAt: Date(),
+            capturedVia: .hook,
+            state: .alive
+        )
+        guard case .typeCommand(let text, let submit) = strategy.resume(ref: ref) else {
+            XCTFail("expected typeCommand")
+            return
+        }
+        XCTAssertEqual(text, "'copilot'")
+        XCTAssertTrue(submit)
+    }
+
+    func testGitHubCopilotPlaceholderResumeSkips() {
+        let strategy = GitHubCopilotStrategy()
+        let ref = ConversationRef(
+            kind: "github-copilot",
             id: "wrapper-claim:foo",
             placeholder: true,
             capturedAt: Date(),
