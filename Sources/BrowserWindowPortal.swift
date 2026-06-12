@@ -2249,7 +2249,6 @@ final class WindowBrowserPortal: NSObject {
             entriesByWebViewId[webViewId] = entry
             entry.containerView?.isHidden = true
             didHide = true
-#if DEBUG
             let anchorWindowDesc: String
             if anchor == nil {
                 anchorWindowDesc = "deallocated"
@@ -2260,11 +2259,19 @@ final class WindowBrowserPortal: NSObject {
             } else {
                 anchorWindowDesc = "other"
             }
+#if DEBUG
             dlog(
                 "browser.portal.orphan.hide web=\(browserPortalDebugToken(entry.webView)) " +
                 "anchor=\(browserPortalDebugToken(anchor)) anchorWindow=\(anchorWindowDesc)"
             )
 #endif
+            // C11-134: orphaned portal entries signal teardown/remount churn —
+            // the shape we need visible in Sentry hang reports.
+            sentryBreadcrumb("portal.orphan.hide", category: "portal", data: [
+                "layer": "browser",
+                "anchor": anchorWindowDesc,
+                "entryCount": entriesByWebViewId.count,
+            ])
         }
         return didHide
     }
