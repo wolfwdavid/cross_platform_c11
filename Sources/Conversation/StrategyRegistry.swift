@@ -30,14 +30,16 @@ struct ConversationStrategyRegistry: Sendable {
 
     /// Default v1 registry. Lands strategies for every built-in agent type:
     /// claude-code (push-primary), codex (pull-primary, ambiguity-aware),
-    /// grok (best-effort resume), opencode and kimi (fresh-launch only).
+    /// grok (best-effort resume), opencode/kimi/github-copilot (fresh-launch
+    /// only).
     static let v1: ConversationStrategyRegistry = {
         ConversationStrategyRegistry(strategies: [
             ClaudeCodeStrategy(),
             CodexStrategy(),
             GrokStrategy(),
             OpencodeStrategy(),
-            KimiStrategy()
+            KimiStrategy(),
+            GitHubCopilotStrategy()
         ])
     }()
 }
