@@ -22,6 +22,11 @@ set(C11_SOURCES
     src/panel/TerminalPanel.cpp
     src/panel/BrowserPanel.cpp
     src/panel/MarkdownPanel.cpp
+    src/i18n/TranslationManager.cpp
+    src/ui/KeyboardShortcutSettings.cpp
+    src/ui/DragDropHandler.cpp
+    src/sidebar/PortScanner.cpp
+    src/agent/SkillInstaller.cpp
     src/session/SessionPersistence.cpp
     src/theme/ThemeManager.cpp
     src/mailbox/MailboxEnvelope.cpp
