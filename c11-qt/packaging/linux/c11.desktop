@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=c11
+Comment=c11 terminal multiplexer
+Exec=c11
+Icon=c11
+Terminal=false
+Type=Application
+Categories=System;TerminalEmulator;
+Keywords=terminal;shell;multiplexer;
