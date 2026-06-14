@@ -17,6 +17,14 @@ extern "C" {
 #include <stdint.h>
 #include <sys/types.h>
 
+// MSVC's <sys/types.h> does not define the POSIX `ssize_t`; map it onto the
+// Win32 SSIZE_T equivalent so this header compiles under MSVC.
+#if defined(_WIN32) && defined(_MSC_VER) && !defined(_SSIZE_T_DEFINED)
+#include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
+#define _SSIZE_T_DEFINED
+#endif
+
 //-------------------------------------------------------------------
 // Macros
 

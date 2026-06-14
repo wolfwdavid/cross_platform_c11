@@ -42,6 +42,7 @@ add_test(NAME GhosttyKeyMapperTest COMMAND test_key_mapper)
 add_executable(test_platform
     tst_Platform.cpp
     ../src/platform/PlatformAbstraction.cpp
+    $<$<PLATFORM_ID:Windows>:../src/platform/platform_windows.cpp>
 )
 
 target_include_directories(test_platform PRIVATE
@@ -156,6 +157,7 @@ add_executable(test_session_persistence
     ../src/ghostty/GhosttyRuntime.cpp
     ../src/ghostty/GhosttyConfig.cpp
     ../src/platform/PlatformAbstraction.cpp
+    $<$<PLATFORM_ID:Windows>:../src/platform/platform_windows.cpp>
 )
 
 target_include_directories(test_session_persistence PRIVATE
