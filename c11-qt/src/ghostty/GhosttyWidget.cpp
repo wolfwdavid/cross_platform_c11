@@ -72,14 +72,14 @@ bool GhosttyWidget::createSurface(const QString &workingDirectory,
     surfConfig.platform_tag = GHOSTTY_PLATFORM_MACOS;
     surfConfig.platform.macos.nsview = m_childNSView;
     surfConfig.userdata = this;
-#elif defined(Q_OS_LINUX)
-    // Linux: use GHOSTTY_PLATFORM_QT with OpenGL renderer.
-    // Requires the Ghostty fork to add GHOSTTY_PLATFORM_QT enum.
-    // Until then, stub mode handles the build.
+#elif defined(Q_OS_LINUX) || defined(Q_OS_WIN)
+    // Linux: OpenGL renderer via GHOSTTY_PLATFORM_QT.
+    // Windows: OpenGL via ANGLE (bundled with Qt WebEngine), same path.
+    // Both require the Ghostty fork to add GHOSTTY_PLATFORM_QT enum.
     if (!GhosttyQtPlatform::configureSurface(surfConfig,
                                               reinterpret_cast<void *>(winId()),
                                               devicePixelRatioF())) {
-        qWarning() << "Ghostty Qt platform not yet available on Linux";
+        qWarning() << "Ghostty Qt platform not yet available on this OS";
         return false;
     }
     surfConfig.userdata = this;

@@ -45,6 +45,7 @@ set(C11_SOURCES
     src/sidebar/SidebarWidget.cpp
     src/ui/MainWindow.cpp
     src/platform/PlatformAbstraction.cpp
+    $<$<PLATFORM_ID:Windows>:src/platform/platform_windows.cpp>
 )
 
 if(APPLE)

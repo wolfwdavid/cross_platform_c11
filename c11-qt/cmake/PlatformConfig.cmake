@@ -73,5 +73,18 @@ elseif(UNIX AND NOT APPLE)
 
 elseif(WIN32)
     add_compile_definitions(C11_PLATFORM_WINDOWS)
-    # Windows libs will be added in Phase 7
+
+    # Windows system libraries
+    list(APPEND C11_PLATFORM_LIBS
+        advapi32    # Security/token APIs (ConvertSidToStringSid)
+        user32      # Window management
+        shell32     # Shell APIs
+        ole32       # COM (for notifications)
+        shlwapi     # Path utilities
+    )
+
+    # OpenGL via ANGLE (bundled with Qt WebEngine on Windows)
+    # No extra linking needed — Qt's OpenGL wrapper handles ANGLE transparently.
+    add_compile_definitions(C11_HAS_ANGLE)
+    message(STATUS "Windows: ANGLE OpenGL provided by Qt WebEngine")
 endif()

@@ -6,6 +6,10 @@
 #include <QGuiApplication>
 #include <QStyleHints>
 
+#ifdef Q_OS_WIN
+#include "platform_windows.h"
+#endif
+
 #ifdef Q_OS_LINUX
 #include <QDBusInterface>
 #include <QDBusReply>
@@ -99,6 +103,8 @@ QList<qint64> findProcessesByName(const QString &name)
         }
     }
     closedir(procDir);
+#elif defined(Q_OS_WIN)
+    return win::findProcessesByName(name);
 #elif defined(Q_OS_MACOS) || defined(Q_OS_UNIX)
     QProcess ps;
     ps.start("pgrep", {"-f", name});
@@ -137,8 +143,9 @@ void showNotification(const QString &title, const QString &body)
                     QVariantMap(),    // hints
                     int(5000));       // timeout_ms
     }
+#elif defined(Q_OS_WIN)
+    win::showToastNotification(title, body);
 #elif defined(Q_OS_MACOS)
-    // macOS notifications handled via NSUserNotification (Phase 8)
     Q_UNUSED(title);
     Q_UNUSED(body);
 #else
@@ -154,8 +161,9 @@ bool isDarkMode()
         return hints->colorScheme() == Qt::ColorScheme::Dark;
     }
 
-#ifdef Q_OS_LINUX
-    // GTK/GNOME fallback: check org.gnome.desktop.interface color-scheme
+#ifdef Q_OS_WIN
+    return win::isSystemDarkMode();
+#elif defined(Q_OS_LINUX)
     QProcess gsettings;
     gsettings.start("gsettings", {"get", "org.gnome.desktop.interface", "color-scheme"});
     if (gsettings.waitForFinished(1000)) {
