@@ -1,6 +1,11 @@
 #include "C11Application.h"
 
+#include "workspace/WorkspaceManager.h"
+#include "platform/PlatformAbstraction.h"
+
+#include <QFileInfo>
 #include <QStandardPaths>
+#include <QDir>
 #include <QProcessEnvironment>
 #include <cstdlib>
 
@@ -32,6 +37,27 @@ void C11Application::reloadConfig()
     m_config = GhosttyConfig::load();
     m_ghosttyRuntime->updateConfig(m_config);
     emit configReloaded();
+}
+
+void C11Application::startSocketServer(WorkspaceManager &manager)
+{
+    m_commandRouter = std::make_unique<SocketCommandRouter>(manager);
+    m_socketServer = std::make_unique<SocketServer>();
+
+    m_socketServer->setCommandHandler(
+        [this](QLocalSocket *, const QString &line) -> QString {
+            return m_commandRouter->processLine(line);
+        });
+
+    QString sockPath = platform::socketPath();
+
+    // Ensure parent directory exists
+    QFileInfo fi(sockPath);
+    QDir().mkpath(fi.absolutePath());
+
+    if (!m_socketServer->start(sockPath)) {
+        qWarning() << "Failed to start socket server at" << sockPath;
+    }
 }
 
 void C11Application::mirrorEnvVars()

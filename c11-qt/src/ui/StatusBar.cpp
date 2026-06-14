@@ -61,14 +61,15 @@ void StatusBar::onSelectionChanged(const QUuid &id)
     Q_UNUSED(id);
     updateStatus();
 
-    // Connect to the new workspace's signals
+    // Connect to the new workspace's signals (disconnect old first)
     if (auto *ws = m_manager.selectedWorkspace()) {
-        connect(ws, &Workspace::panelAdded, this, [this](const QUuid &) { updateStatus(); },
-                Qt::UniqueConnection);
-        connect(ws, &Workspace::panelRemoved, this, [this](const QUuid &) { updateStatus(); },
-                Qt::UniqueConnection);
-        connect(ws, &Workspace::titleChanged, this, [this](const QString &) { updateStatus(); },
-                Qt::UniqueConnection);
+        // Disconnect any previous workspace connections to this
+        for (auto *other : m_manager.workspaces()) {
+            if (other != ws) disconnect(other, nullptr, this, nullptr);
+        }
+        connect(ws, &Workspace::panelAdded, this, [this](const QUuid &) { updateStatus(); });
+        connect(ws, &Workspace::panelRemoved, this, [this](const QUuid &) { updateStatus(); });
+        connect(ws, &Workspace::titleChanged, this, [this](const QString &) { updateStatus(); });
     }
 }
 

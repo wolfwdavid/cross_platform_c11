@@ -105,3 +105,20 @@ target_link_libraries(test_workspace_manager PRIVATE
 )
 
 add_test(NAME WorkspaceManagerTest COMMAND test_workspace_manager)
+
+# SocketProtocol unit tests
+add_executable(test_socket_protocol
+    tst_SocketProtocol.cpp
+    ../src/socket/SocketProtocol.cpp
+)
+
+target_include_directories(test_socket_protocol PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src
+)
+
+target_link_libraries(test_socket_protocol PRIVATE
+    Qt6::Core
+    Qt6::Test
+)
+
+add_test(NAME SocketProtocolTest COMMAND test_socket_protocol)

@@ -112,6 +112,9 @@ MainWindow::MainWindow(C11Application &app, QWidget *parent)
         }
     });
 
+    // Start socket server
+    m_app.startSocketServer(*m_workspaceManager);
+
     // Focus the initial workspace's terminal
     if (auto *ws = m_workspaceManager->selectedWorkspace()) {
         if (auto *panel = ws->focusedPanel()) {

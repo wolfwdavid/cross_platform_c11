@@ -22,6 +22,9 @@ set(C11_SOURCES
     src/panel/TerminalPanel.cpp
     src/panel/BrowserPanel.cpp
     src/panel/MarkdownPanel.cpp
+    src/socket/SocketServer.cpp
+    src/socket/SocketProtocol.cpp
+    src/socket/SocketCommandRouter.cpp
     src/ui/FindOverlay.cpp
     src/ui/StatusBar.cpp
     src/workspace/PaneLayout.cpp
@@ -53,6 +56,7 @@ target_link_libraries(c11-app PRIVATE
     Qt6::Gui
     Qt6::Widgets
     Qt6::WebEngineWidgets
+    Qt6::Network
     ghostty
     ${C11_PLATFORM_LIBS}
 )
@@ -78,6 +82,15 @@ if(APPLE)
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/packaging/macos/Info.plist"
     )
 endif()
+
+# Standalone CLI binary (no Qt GUI, no Ghostty)
+add_executable(c11-cli cli/c11cli.cpp)
+target_link_libraries(c11-cli PRIVATE Qt6::Core Qt6::Network)
+target_compile_definitions(c11-cli PRIVATE C11_VERSION="${PROJECT_VERSION}")
+set_target_properties(c11-cli PROPERTIES
+    OUTPUT_NAME "c11"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/cli"
+)
 
 # Tests
 option(C11_BUILD_TESTS "Build unit tests" ON)
