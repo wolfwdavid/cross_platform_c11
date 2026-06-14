@@ -81,6 +81,8 @@ add_executable(test_workspace_manager
     ../src/workspace/PaneLayout.cpp
     ../src/panel/Panel.cpp
     ../src/panel/TerminalPanel.cpp
+    ../src/panel/BrowserPanel.cpp
+    ../src/panel/MarkdownPanel.cpp
     ../src/ghostty/GhosttyWidget.cpp
     ../src/ghostty/GhosttyKeyMapper.cpp
     ../src/ghostty/GhosttyRuntime.cpp
@@ -98,6 +100,7 @@ target_link_libraries(test_workspace_manager PRIVATE
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets
+    Qt6::WebEngineWidgets
     Qt6::Test
 )
 

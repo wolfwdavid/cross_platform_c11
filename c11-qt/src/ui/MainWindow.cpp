@@ -1,13 +1,16 @@
 #include "MainWindow.h"
 #include "panel/TerminalPanel.h"
+#include "panel/BrowserPanel.h"
+#include "panel/MarkdownPanel.h"
 
 #include <QApplication>
 #include <QCloseEvent>
 #include <QClipboard>
+#include <QFileDialog>
 #include <QHBoxLayout>
+#include <QInputDialog>
 #include <QMenuBar>
 #include <QScreen>
-#include <QStatusBar>
 #include <QDebug>
 
 namespace c11 {
@@ -33,17 +36,81 @@ MainWindow::MainWindow(C11Application &app, QWidget *parent)
 
     // Build sidebar + workspace stack layout
     auto *centralWidget = new QWidget(this);
-    auto *hbox = new QHBoxLayout(centralWidget);
+    auto *vbox = new QVBoxLayout(centralWidget);
+    vbox->setContentsMargins(0, 0, 0, 0);
+    vbox->setSpacing(0);
+
+    // Main content: sidebar + workspace stack
+    auto *contentWidget = new QWidget(centralWidget);
+    auto *hbox = new QHBoxLayout(contentWidget);
     hbox->setContentsMargins(0, 0, 0, 0);
     hbox->setSpacing(0);
 
-    m_sidebar = new SidebarWidget(*m_workspaceManager, centralWidget);
+    m_sidebar = new SidebarWidget(*m_workspaceManager, contentWidget);
     hbox->addWidget(m_sidebar);
 
-    m_workspaceStack = new WorkspaceStackWidget(*m_workspaceManager, centralWidget);
-    hbox->addWidget(m_workspaceStack, 1); // stretch factor 1
+    m_workspaceStack = new WorkspaceStackWidget(*m_workspaceManager, contentWidget);
+    hbox->addWidget(m_workspaceStack, 1);
+
+    vbox->addWidget(contentWidget, 1);
+
+    // Find overlay (floating, initially hidden)
+    m_findOverlay = new FindOverlay(centralWidget);
+    vbox->addWidget(m_findOverlay);
+
+    // Status bar
+    m_statusBar = new StatusBar(*m_workspaceManager, centralWidget);
+    vbox->addWidget(m_statusBar);
 
     setCentralWidget(centralWidget);
+
+    // Wire find overlay
+    connect(m_findOverlay, &FindOverlay::searchRequested, this, [this](const QString &text) {
+        auto *ws = m_workspaceManager->selectedWorkspace();
+        if (!ws) return;
+        auto *panel = ws->focusedPanel();
+        if (!panel) return;
+        if (auto *bp = dynamic_cast<BrowserPanel *>(panel)) {
+            bp->findText(text);
+        } else if (auto *mp = dynamic_cast<MarkdownPanel *>(panel)) {
+            mp->findText(text);
+        }
+    });
+
+    connect(m_findOverlay, &FindOverlay::nextRequested, this, [this]() {
+        auto *ws = m_workspaceManager->selectedWorkspace();
+        if (!ws) return;
+        auto *panel = ws->focusedPanel();
+        if (auto *bp = dynamic_cast<BrowserPanel *>(panel)) {
+            bp->findText(m_findOverlay->searchText(), true);
+        } else if (auto *mp = dynamic_cast<MarkdownPanel *>(panel)) {
+            mp->findText(m_findOverlay->searchText(), true);
+        }
+    });
+
+    connect(m_findOverlay, &FindOverlay::previousRequested, this, [this]() {
+        auto *ws = m_workspaceManager->selectedWorkspace();
+        if (!ws) return;
+        auto *panel = ws->focusedPanel();
+        if (auto *bp = dynamic_cast<BrowserPanel *>(panel)) {
+            bp->findText(m_findOverlay->searchText(), false);
+        } else if (auto *mp = dynamic_cast<MarkdownPanel *>(panel)) {
+            mp->findText(m_findOverlay->searchText(), false);
+        }
+    });
+
+    connect(m_findOverlay, &FindOverlay::closeRequested, this, [this]() {
+        m_findOverlay->hide();
+        auto *ws = m_workspaceManager->selectedWorkspace();
+        if (ws && ws->focusedPanel()) {
+            if (auto *bp = dynamic_cast<BrowserPanel *>(ws->focusedPanel())) {
+                bp->clearFind();
+            } else if (auto *mp = dynamic_cast<MarkdownPanel *>(ws->focusedPanel())) {
+                mp->clearFind();
+            }
+            ws->focusedPanel()->focus();
+        }
+    });
 
     // Focus the initial workspace's terminal
     if (auto *ws = m_workspaceManager->selectedWorkspace()) {
@@ -59,7 +126,6 @@ MainWindow::~MainWindow() = default;
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
-    // Close all workspaces
     while (m_workspaceManager->count() > 0) {
         m_workspaceManager->removeWorkspace(0);
     }
@@ -74,8 +140,19 @@ void MainWindow::changeEvent(QEvent *event)
     }
 }
 
+void MainWindow::toggleFind()
+{
+    if (m_findOverlay->isVisible()) {
+        m_findOverlay->hide();
+    } else {
+        m_findOverlay->show();
+        m_findOverlay->focusSearchField();
+    }
+}
+
 void MainWindow::setupMenuBar()
 {
+    // --- File menu ---
     auto *fileMenu = menuBar()->addMenu(tr("&File"));
 
     fileMenu->addAction(tr("New Workspace"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_T), [this]() {
@@ -91,10 +168,40 @@ void MainWindow::setupMenuBar()
 
     fileMenu->addSeparator();
 
+    fileMenu->addAction(tr("Open Browser"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_B), [this]() {
+        auto *ws = m_workspaceManager->selectedWorkspace();
+        if (!ws) return;
+        auto *panel = ws->createBrowserPanel(QUrl("https://duckduckgo.com"));
+        if (ws->layout() && !ws->focusedPanelId().isNull()) {
+            ws->layout()->splitLeaf(ws->focusedPanelId(), panel->id(),
+                                     PaneLayout::Direction::Horizontal);
+        }
+        ws->setFocusedPanelId(panel->id());
+        emit ws->layoutChanged();
+    });
+
+    fileMenu->addAction(tr("Open Markdown..."), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_M), [this]() {
+        auto *ws = m_workspaceManager->selectedWorkspace();
+        if (!ws) return;
+        QString path = QFileDialog::getOpenFileName(this, tr("Open Markdown File"),
+                                                     QString(), tr("Markdown (*.md *.markdown);;All (*)"));
+        if (path.isEmpty()) return;
+        auto *panel = ws->createMarkdownPanel(path);
+        if (ws->layout() && !ws->focusedPanelId().isNull()) {
+            ws->layout()->splitLeaf(ws->focusedPanelId(), panel->id(),
+                                     PaneLayout::Direction::Horizontal);
+        }
+        ws->setFocusedPanelId(panel->id());
+        emit ws->layoutChanged();
+    });
+
+    fileMenu->addSeparator();
+
     fileMenu->addAction(tr("&Quit"), QKeySequence::Quit, []() {
         QApplication::quit();
     });
 
+    // --- Edit menu ---
     auto *editMenu = menuBar()->addMenu(tr("&Edit"));
 
     editMenu->addAction(tr("&Copy"), QKeySequence::Copy, [this]() {
@@ -125,6 +232,13 @@ void MainWindow::setupMenuBar()
         }
     });
 
+    editMenu->addSeparator();
+
+    editMenu->addAction(tr("&Find"), QKeySequence::Find, [this]() {
+        toggleFind();
+    });
+
+    // --- View menu ---
     auto *viewMenu = menuBar()->addMenu(tr("&View"));
 
     viewMenu->addAction(tr("Toggle Sidebar"), QKeySequence(Qt::CTRL | Qt::Key_B), [this]() {
@@ -161,6 +275,7 @@ void MainWindow::setupMenuBar()
         m_app.reloadConfig();
     });
 
+    // --- Help menu ---
     auto *helpMenu = menuBar()->addMenu(tr("&Help"));
     helpMenu->addAction(tr("About c11"), [this]() {
         qDebug() << "c11 version" << C11_VERSION;
@@ -174,8 +289,6 @@ void MainWindow::applyConfig()
     QPalette pal = palette();
     pal.setColor(QPalette::Window, config.backgroundColor);
     setPalette(pal);
-
-    statusBar()->hide();
 }
 
 } // namespace c11

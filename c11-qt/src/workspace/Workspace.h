@@ -3,6 +3,8 @@
 #include "PaneLayout.h"
 #include "panel/Panel.h"
 #include "panel/TerminalPanel.h"
+#include "panel/BrowserPanel.h"
+#include "panel/MarkdownPanel.h"
 #include "ghostty/GhosttyRuntime.h"
 
 #include <QObject>
@@ -41,6 +43,8 @@ public:
 
     TerminalPanel *createTerminalPanel(const QString &workingDirectory = {},
                                         const QString &command = {});
+    BrowserPanel *createBrowserPanel(const QUrl &url = QUrl("about:blank"));
+    MarkdownPanel *createMarkdownPanel(const QString &filePath = {});
     void removePanel(const QUuid &panelId);
 
     // Layout

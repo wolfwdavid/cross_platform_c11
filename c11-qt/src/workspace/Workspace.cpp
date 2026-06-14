@@ -69,6 +69,46 @@ TerminalPanel *Workspace::createTerminalPanel(const QString &workingDirectory,
     return panel;
 }
 
+BrowserPanel *Workspace::createBrowserPanel(const QUrl &url)
+{
+    auto *panel = new BrowserPanel(m_id, url, this);
+    m_panels.insert(panel->id(), panel);
+
+    if (!m_layout) {
+        m_layout = PaneLayout::makeLeaf(panel->id());
+    }
+
+    connect(panel, &Panel::titleChanged, this, [this, panel]() {
+        if (panel->id() == m_focusedPanelId) {
+            setTitle(panel->displayTitle());
+        }
+    });
+
+    emit panelAdded(panel->id());
+    emit layoutChanged();
+    return panel;
+}
+
+MarkdownPanel *Workspace::createMarkdownPanel(const QString &filePath)
+{
+    auto *panel = new MarkdownPanel(m_id, filePath, this);
+    m_panels.insert(panel->id(), panel);
+
+    if (!m_layout) {
+        m_layout = PaneLayout::makeLeaf(panel->id());
+    }
+
+    connect(panel, &Panel::titleChanged, this, [this, panel]() {
+        if (panel->id() == m_focusedPanelId) {
+            setTitle(panel->displayTitle());
+        }
+    });
+
+    emit panelAdded(panel->id());
+    emit layoutChanged();
+    return panel;
+}
+
 void Workspace::removePanel(const QUuid &panelId)
 {
     auto *panel = m_panels.value(panelId);

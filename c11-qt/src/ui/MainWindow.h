@@ -4,6 +4,8 @@
 #include "workspace/WorkspaceManager.h"
 #include "workspace/WorkspaceStackWidget.h"
 #include "sidebar/SidebarWidget.h"
+#include "FindOverlay.h"
+#include "StatusBar.h"
 
 #include <QMainWindow>
 
@@ -25,11 +27,14 @@ protected:
 private:
     void setupMenuBar();
     void applyConfig();
+    void toggleFind();
 
     C11Application &m_app;
     WorkspaceManager *m_workspaceManager = nullptr;
     SidebarWidget *m_sidebar = nullptr;
     WorkspaceStackWidget *m_workspaceStack = nullptr;
+    FindOverlay *m_findOverlay = nullptr;
+    StatusBar *m_statusBar = nullptr;
 };
 
 } // namespace c11

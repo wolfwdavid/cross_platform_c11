@@ -20,6 +20,10 @@ set(C11_SOURCES
     src/ghostty/GhosttyKeyMapper.cpp
     src/panel/Panel.cpp
     src/panel/TerminalPanel.cpp
+    src/panel/BrowserPanel.cpp
+    src/panel/MarkdownPanel.cpp
+    src/ui/FindOverlay.cpp
+    src/ui/StatusBar.cpp
     src/workspace/PaneLayout.cpp
     src/workspace/PaneLayoutWidget.cpp
     src/workspace/Workspace.cpp
@@ -48,6 +52,7 @@ target_link_libraries(c11-app PRIVATE
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets
+    Qt6::WebEngineWidgets
     ghostty
     ${C11_PLATFORM_LIBS}
 )
