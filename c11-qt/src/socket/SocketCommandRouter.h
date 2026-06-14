@@ -66,6 +66,11 @@ private:
     QJsonValue v2PaneList(const QJsonObject &params);
     QJsonValue v2BrowserOpen(const QJsonObject &params);
 
+    // Metadata V2 commands
+    QJsonValue v2SurfaceSetMetadata(const QJsonObject &params);
+    QJsonValue v2SurfaceGetMetadata(const QJsonObject &params);
+    QJsonValue v2SurfaceClearMetadata(const QJsonObject &params);
+
     // Helpers
     QJsonObject workspaceToJson(const Workspace *ws) const;
     QJsonObject panelToJson(const Panel *panel) const;

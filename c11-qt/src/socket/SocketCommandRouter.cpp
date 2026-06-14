@@ -1,4 +1,5 @@
 #include "SocketCommandRouter.h"
+#include "metadata/SurfaceMetadataStore.h"
 #include "panel/TerminalPanel.h"
 #include "panel/BrowserPanel.h"
 #include "panel/MarkdownPanel.h"
@@ -52,6 +53,9 @@ void SocketCommandRouter::registerCommands()
     m_v2Methods["surface.close"]       = [this](auto &p) { return v2SurfaceClose(p); };
     m_v2Methods["pane.list"]           = [this](auto &p) { return v2PaneList(p); };
     m_v2Methods["browser.open_split"]  = [this](auto &p) { return v2BrowserOpen(p); };
+    m_v2Methods["surface.set_metadata"]   = [this](auto &p) { return v2SurfaceSetMetadata(p); };
+    m_v2Methods["surface.get_metadata"]   = [this](auto &p) { return v2SurfaceGetMetadata(p); };
+    m_v2Methods["surface.clear_metadata"] = [this](auto &p) { return v2SurfaceClearMetadata(p); };
 }
 
 QString SocketCommandRouter::processLine(const QString &line)
@@ -443,6 +447,52 @@ QJsonValue SocketCommandRouter::v2BrowserOpen(const QJsonObject &params)
     ws->setFocusedPanelId(panel->id());
     emit ws->layoutChanged();
     return panelToJson(panel);
+}
+
+// === Metadata Commands ===
+
+QJsonValue SocketCommandRouter::v2SurfaceSetMetadata(const QJsonObject &params)
+{
+    QString surfaceIdStr = params.value("id").toString();
+    QJsonObject metadata = params.value("metadata").toObject();
+
+    if (surfaceIdStr.isEmpty() || metadata.isEmpty()) {
+        return QJsonValue("Missing id or metadata");
+    }
+
+    QUuid surfaceId = QUuid::fromString(surfaceIdStr);
+    auto result = SurfaceMetadataStore::instance().setMetadata(surfaceId, metadata);
+    if (!result.ok) {
+        return QJsonValue(result.error);
+    }
+    return QJsonValue(true);
+}
+
+QJsonValue SocketCommandRouter::v2SurfaceGetMetadata(const QJsonObject &params)
+{
+    QString surfaceIdStr = params.value("id").toString();
+    if (surfaceIdStr.isEmpty()) {
+        // Use focused panel
+        auto *ws = m_manager.selectedWorkspace();
+        if (ws) surfaceIdStr = ws->focusedPanelId().toString(QUuid::WithoutBraces);
+    }
+
+    QUuid surfaceId = QUuid::fromString(surfaceIdStr);
+    return SurfaceMetadataStore::instance().getMetadata(surfaceId);
+}
+
+QJsonValue SocketCommandRouter::v2SurfaceClearMetadata(const QJsonObject &params)
+{
+    QString surfaceIdStr = params.value("id").toString();
+    QString key = params.value("key").toString();
+
+    QUuid surfaceId = QUuid::fromString(surfaceIdStr);
+    if (key.isEmpty()) {
+        SurfaceMetadataStore::instance().clearMetadata(surfaceId);
+    } else {
+        SurfaceMetadataStore::instance().clearMetadata(surfaceId, key);
+    }
+    return QJsonValue(true);
 }
 
 // === Helpers ===

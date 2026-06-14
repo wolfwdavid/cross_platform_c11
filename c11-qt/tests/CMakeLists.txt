@@ -122,3 +122,20 @@ target_link_libraries(test_socket_protocol PRIVATE
 )
 
 add_test(NAME SocketProtocolTest COMMAND test_socket_protocol)
+
+# MetadataStore unit tests
+add_executable(test_metadata_store
+    tst_MetadataStore.cpp
+    ../src/metadata/SurfaceMetadataStore.cpp
+)
+
+target_include_directories(test_metadata_store PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src
+)
+
+target_link_libraries(test_metadata_store PRIVATE
+    Qt6::Core
+    Qt6::Test
+)
+
+add_test(NAME MetadataStoreTest COMMAND test_metadata_store)
