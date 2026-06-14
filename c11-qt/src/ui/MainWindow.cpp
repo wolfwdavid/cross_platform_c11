@@ -1,8 +1,10 @@
 #include "MainWindow.h"
+#include "panel/TerminalPanel.h"
 
 #include <QApplication>
 #include <QCloseEvent>
 #include <QClipboard>
+#include <QHBoxLayout>
 #include <QMenuBar>
 #include <QScreen>
 #include <QStatusBar>
@@ -17,7 +19,6 @@ MainWindow::MainWindow(C11Application &app, QWidget *parent)
     setWindowTitle("c11");
     resize(1200, 800);
 
-    // Center on primary screen to avoid spawning offscreen
     if (auto *screen = QApplication::primaryScreen()) {
         auto geom = screen->availableGeometry();
         move(geom.center() - QPoint(600, 400));
@@ -26,14 +27,30 @@ MainWindow::MainWindow(C11Application &app, QWidget *parent)
     applyConfig();
     setupMenuBar();
 
-    // Create the terminal widget as the central widget
-    m_terminalWidget = new GhosttyWidget(app.ghosttyRuntime(), this);
-    setCentralWidget(m_terminalWidget);
+    // Create workspace manager with initial workspace
+    m_workspaceManager = new WorkspaceManager(app.ghosttyRuntime(), this);
+    m_workspaceManager->addWorkspace("Terminal", app.ghosttyConfig().workingDirectory);
 
-    // Create the Ghostty surface
-    const auto &config = app.ghosttyConfig();
-    m_terminalWidget->createSurface(config.workingDirectory);
-    m_terminalWidget->setFocus();
+    // Build sidebar + workspace stack layout
+    auto *centralWidget = new QWidget(this);
+    auto *hbox = new QHBoxLayout(centralWidget);
+    hbox->setContentsMargins(0, 0, 0, 0);
+    hbox->setSpacing(0);
+
+    m_sidebar = new SidebarWidget(*m_workspaceManager, centralWidget);
+    hbox->addWidget(m_sidebar);
+
+    m_workspaceStack = new WorkspaceStackWidget(*m_workspaceManager, centralWidget);
+    hbox->addWidget(m_workspaceStack, 1); // stretch factor 1
+
+    setCentralWidget(centralWidget);
+
+    // Focus the initial workspace's terminal
+    if (auto *ws = m_workspaceManager->selectedWorkspace()) {
+        if (auto *panel = ws->focusedPanel()) {
+            panel->focus();
+        }
+    }
 
     connect(&app, &C11Application::configReloaded, this, &MainWindow::applyConfig);
 }
@@ -42,7 +59,10 @@ MainWindow::~MainWindow() = default;
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
-    m_terminalWidget->destroySurface();
+    // Close all workspaces
+    while (m_workspaceManager->count() > 0) {
+        m_workspaceManager->removeWorkspace(0);
+    }
     event->accept();
 }
 
@@ -58,11 +78,16 @@ void MainWindow::setupMenuBar()
 {
     auto *fileMenu = menuBar()->addMenu(tr("&File"));
 
-    auto *newWindowAction = fileMenu->addAction(tr("New Window"), QKeySequence::New, [this]() {
-        // Phase 1: proper multi-window support
-        qDebug() << "New window requested";
+    fileMenu->addAction(tr("New Workspace"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_T), [this]() {
+        m_workspaceManager->addWorkspace();
     });
-    Q_UNUSED(newWindowAction);
+
+    fileMenu->addAction(tr("Close Workspace"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_W), [this]() {
+        auto id = m_workspaceManager->selectedWorkspaceId();
+        if (!id.isNull() && m_workspaceManager->count() > 1) {
+            m_workspaceManager->removeWorkspace(id);
+        }
+    });
 
     fileMenu->addSeparator();
 
@@ -74,27 +99,63 @@ void MainWindow::setupMenuBar()
 
     editMenu->addAction(tr("&Copy"), QKeySequence::Copy, [this]() {
 #ifndef C11_GHOSTTY_STUB
-        if (m_terminalWidget && m_terminalWidget->hasSurface()) {
-            ghostty_text_s text{};
-            if (ghostty_surface_read_selection(m_terminalWidget->surface(), &text)) {
-                if (text.text && text.text_len > 0) {
-                    QApplication::clipboard()->setText(
-                        QString::fromUtf8(text.text, static_cast<int>(text.text_len)));
-                }
-                ghostty_surface_free_text(m_terminalWidget->surface(), &text);
+        auto *ws = m_workspaceManager->selectedWorkspace();
+        if (!ws) return;
+        auto *panel = dynamic_cast<TerminalPanel *>(ws->focusedPanel());
+        if (!panel || !panel->ghosttyWidget()->hasSurface()) return;
+        ghostty_text_s text{};
+        if (ghostty_surface_read_selection(panel->ghosttyWidget()->surface(), &text)) {
+            if (text.text && text.text_len > 0) {
+                QApplication::clipboard()->setText(
+                    QString::fromUtf8(text.text, static_cast<int>(text.text_len)));
             }
+            ghostty_surface_free_text(panel->ghosttyWidget()->surface(), &text);
         }
 #endif
     });
 
     editMenu->addAction(tr("&Paste"), QKeySequence::Paste, [this]() {
         QString text = QApplication::clipboard()->text();
-        if (!text.isEmpty() && m_terminalWidget) {
-            m_terminalWidget->sendText(text);
+        if (text.isEmpty()) return;
+        auto *ws = m_workspaceManager->selectedWorkspace();
+        if (!ws) return;
+        auto *panel = dynamic_cast<TerminalPanel *>(ws->focusedPanel());
+        if (panel) {
+            panel->ghosttyWidget()->sendText(text);
         }
     });
 
     auto *viewMenu = menuBar()->addMenu(tr("&View"));
+
+    viewMenu->addAction(tr("Toggle Sidebar"), QKeySequence(Qt::CTRL | Qt::Key_B), [this]() {
+        m_sidebar->toggleVisibility();
+    });
+
+    viewMenu->addSeparator();
+
+    viewMenu->addAction(tr("Split Right"), QKeySequence(Qt::CTRL | Qt::Key_Backslash), [this]() {
+        auto *ws = m_workspaceManager->selectedWorkspace();
+        if (!ws) return;
+        ws->splitPanel(ws->focusedPanelId(), PaneLayout::Direction::Horizontal);
+    });
+
+    viewMenu->addAction(tr("Split Down"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Backslash), [this]() {
+        auto *ws = m_workspaceManager->selectedWorkspace();
+        if (!ws) return;
+        ws->splitPanel(ws->focusedPanelId(), PaneLayout::Direction::Vertical);
+    });
+
+    viewMenu->addSeparator();
+
+    viewMenu->addAction(tr("Next Workspace"), QKeySequence(Qt::CTRL | Qt::Key_Tab), [this]() {
+        m_workspaceManager->selectNextWorkspace();
+    });
+
+    viewMenu->addAction(tr("Previous Workspace"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Tab), [this]() {
+        m_workspaceManager->selectPreviousWorkspace();
+    });
+
+    viewMenu->addSeparator();
 
     viewMenu->addAction(tr("Reload Config"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Comma), [this]() {
         m_app.reloadConfig();
@@ -110,12 +171,11 @@ void MainWindow::applyConfig()
 {
     const auto &config = m_app.ghosttyConfig();
 
-    // Apply background color to the window
     QPalette pal = palette();
     pal.setColor(QPalette::Window, config.backgroundColor);
     setPalette(pal);
 
-    statusBar()->hide(); // Phase 2 adds a status bar
+    statusBar()->hide();
 }
 
 } // namespace c11

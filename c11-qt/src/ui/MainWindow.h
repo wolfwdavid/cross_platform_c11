@@ -1,21 +1,22 @@
 #pragma once
 
 #include "app/C11Application.h"
-#include "ghostty/GhosttyWidget.h"
+#include "workspace/WorkspaceManager.h"
+#include "workspace/WorkspaceStackWidget.h"
+#include "sidebar/SidebarWidget.h"
 
 #include <QMainWindow>
-#include <QVBoxLayout>
 
 namespace c11 {
 
-// Phase 0 MainWindow: a single GhosttyWidget filling the window.
-// Phase 1 adds sidebar, workspace stack, and split panes.
 class MainWindow : public QMainWindow {
     Q_OBJECT
 
 public:
     explicit MainWindow(C11Application &app, QWidget *parent = nullptr);
     ~MainWindow() override;
+
+    WorkspaceManager &workspaceManager() { return *m_workspaceManager; }
 
 protected:
     void closeEvent(QCloseEvent *event) override;
@@ -26,7 +27,9 @@ private:
     void applyConfig();
 
     C11Application &m_app;
-    GhosttyWidget *m_terminalWidget = nullptr;
+    WorkspaceManager *m_workspaceManager = nullptr;
+    SidebarWidget *m_sidebar = nullptr;
+    WorkspaceStackWidget *m_workspaceStack = nullptr;
 };
 
 } // namespace c11

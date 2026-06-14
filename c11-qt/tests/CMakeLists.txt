@@ -55,3 +55,50 @@ target_link_libraries(test_platform PRIVATE
 )
 
 add_test(NAME PlatformTest COMMAND test_platform)
+
+# PaneLayout unit tests
+add_executable(test_pane_layout
+    tst_PaneLayout.cpp
+    ../src/workspace/PaneLayout.cpp
+)
+
+target_include_directories(test_pane_layout PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src
+)
+
+target_link_libraries(test_pane_layout PRIVATE
+    Qt6::Core
+    Qt6::Test
+)
+
+add_test(NAME PaneLayoutTest COMMAND test_pane_layout)
+
+# WorkspaceManager unit tests (stub mode, no Ghostty linking)
+add_executable(test_workspace_manager
+    tst_WorkspaceManager.cpp
+    ../src/workspace/WorkspaceManager.cpp
+    ../src/workspace/Workspace.cpp
+    ../src/workspace/PaneLayout.cpp
+    ../src/panel/Panel.cpp
+    ../src/panel/TerminalPanel.cpp
+    ../src/ghostty/GhosttyWidget.cpp
+    ../src/ghostty/GhosttyKeyMapper.cpp
+    ../src/ghostty/GhosttyRuntime.cpp
+    ../src/ghostty/GhosttyConfig.cpp
+)
+
+target_include_directories(test_workspace_manager PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../
+)
+
+target_compile_definitions(test_workspace_manager PRIVATE C11_GHOSTTY_STUB)
+
+target_link_libraries(test_workspace_manager PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+add_test(NAME WorkspaceManagerTest COMMAND test_workspace_manager)

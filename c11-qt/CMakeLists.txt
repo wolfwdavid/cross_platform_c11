@@ -18,6 +18,14 @@ set(C11_SOURCES
     src/ghostty/GhosttyConfig.cpp
     src/ghostty/GhosttyWidget.cpp
     src/ghostty/GhosttyKeyMapper.cpp
+    src/panel/Panel.cpp
+    src/panel/TerminalPanel.cpp
+    src/workspace/PaneLayout.cpp
+    src/workspace/PaneLayoutWidget.cpp
+    src/workspace/Workspace.cpp
+    src/workspace/WorkspaceManager.cpp
+    src/workspace/WorkspaceStackWidget.cpp
+    src/sidebar/SidebarWidget.cpp
     src/ui/MainWindow.cpp
     src/platform/PlatformAbstraction.cpp
 )
