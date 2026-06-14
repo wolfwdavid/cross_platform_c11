@@ -112,6 +112,20 @@ MainWindow::MainWindow(C11Application &app, QWidget *parent)
         }
     });
 
+    // Session persistence
+    m_sessionPersistence = new SessionPersistence(*m_workspaceManager, this);
+    m_sessionPersistence->startAutosave();
+
+    // Theme manager
+    ThemeManager::instance().loadThemes();
+    connect(&ThemeManager::instance(), &ThemeManager::themeChanged, this, [this](const C11Theme &theme) {
+        if (!theme.windowBackground.isValid()) return;
+        QPalette pal = palette();
+        pal.setColor(QPalette::Window, theme.windowBackground);
+        setPalette(pal);
+        setStyleSheet(ThemeManager::instance().generateStylesheet(theme));
+    });
+
     // Start socket server
     m_app.startSocketServer(*m_workspaceManager);
 

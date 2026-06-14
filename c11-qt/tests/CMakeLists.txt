@@ -139,3 +139,55 @@ target_link_libraries(test_metadata_store PRIVATE
 )
 
 add_test(NAME MetadataStoreTest COMMAND test_metadata_store)
+
+# SessionPersistence unit tests
+add_executable(test_session_persistence
+    tst_SessionPersistence.cpp
+    ../src/session/SessionPersistence.cpp
+    ../src/workspace/WorkspaceManager.cpp
+    ../src/workspace/Workspace.cpp
+    ../src/workspace/PaneLayout.cpp
+    ../src/panel/Panel.cpp
+    ../src/panel/TerminalPanel.cpp
+    ../src/panel/BrowserPanel.cpp
+    ../src/panel/MarkdownPanel.cpp
+    ../src/ghostty/GhosttyWidget.cpp
+    ../src/ghostty/GhosttyKeyMapper.cpp
+    ../src/ghostty/GhosttyRuntime.cpp
+    ../src/ghostty/GhosttyConfig.cpp
+    ../src/platform/PlatformAbstraction.cpp
+)
+
+target_include_directories(test_session_persistence PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../
+)
+
+target_compile_definitions(test_session_persistence PRIVATE C11_GHOSTTY_STUB)
+
+target_link_libraries(test_session_persistence PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::WebEngineWidgets
+    Qt6::Test
+)
+
+add_test(NAME SessionPersistenceTest COMMAND test_session_persistence)
+
+# MailboxEnvelope unit tests
+add_executable(test_mailbox_envelope
+    tst_MailboxEnvelope.cpp
+    ../src/mailbox/MailboxEnvelope.cpp
+)
+
+target_include_directories(test_mailbox_envelope PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src
+)
+
+target_link_libraries(test_mailbox_envelope PRIVATE
+    Qt6::Core
+    Qt6::Test
+)
+
+add_test(NAME MailboxEnvelopeTest COMMAND test_mailbox_envelope)

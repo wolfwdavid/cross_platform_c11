@@ -1,5 +1,6 @@
 #include "SocketCommandRouter.h"
 #include "metadata/SurfaceMetadataStore.h"
+#include "theme/ThemeManager.h"
 #include "panel/TerminalPanel.h"
 #include "panel/BrowserPanel.h"
 #include "panel/MarkdownPanel.h"
@@ -53,6 +54,9 @@ void SocketCommandRouter::registerCommands()
     m_v2Methods["surface.close"]       = [this](auto &p) { return v2SurfaceClose(p); };
     m_v2Methods["pane.list"]           = [this](auto &p) { return v2PaneList(p); };
     m_v2Methods["browser.open_split"]  = [this](auto &p) { return v2BrowserOpen(p); };
+    m_v2Methods["theme.list"]              = [this](auto &p) { return v2ThemeList(p); };
+    m_v2Methods["theme.get"]               = [this](auto &p) { return v2ThemeGet(p); };
+    m_v2Methods["theme.set_active"]        = [this](auto &p) { return v2ThemeSetActive(p); };
     m_v2Methods["surface.set_metadata"]   = [this](auto &p) { return v2SurfaceSetMetadata(p); };
     m_v2Methods["surface.get_metadata"]   = [this](auto &p) { return v2SurfaceGetMetadata(p); };
     m_v2Methods["surface.clear_metadata"] = [this](auto &p) { return v2SurfaceClearMetadata(p); };
@@ -447,6 +451,44 @@ QJsonValue SocketCommandRouter::v2BrowserOpen(const QJsonObject &params)
     ws->setFocusedPanelId(panel->id());
     emit ws->layoutChanged();
     return panelToJson(panel);
+}
+
+// === Theme Commands ===
+
+QJsonValue SocketCommandRouter::v2ThemeList(const QJsonObject &)
+{
+    QJsonArray arr;
+    for (const auto &name : ThemeManager::instance().availableThemeNames()) {
+        arr.append(name);
+    }
+    return arr;
+}
+
+QJsonValue SocketCommandRouter::v2ThemeGet(const QJsonObject &params)
+{
+    QString name = params.value("name").toString();
+    auto *theme = ThemeManager::instance().theme(name);
+    if (!theme) return QJsonValue();
+
+    QJsonObject obj;
+    obj["name"] = theme->name;
+    obj["source_path"] = theme->sourcePath;
+    if (theme->windowBackground.isValid())
+        obj["window_background"] = theme->windowBackground.name();
+    if (theme->sidebarBackground.isValid())
+        obj["sidebar_background"] = theme->sidebarBackground.name();
+    return obj;
+}
+
+QJsonValue SocketCommandRouter::v2ThemeSetActive(const QJsonObject &params)
+{
+    QString name = params.value("name").toString();
+    if (name.isEmpty()) {
+        ThemeManager::instance().clearActiveTheme();
+    } else {
+        ThemeManager::instance().setActiveTheme(name);
+    }
+    return QJsonValue(true);
 }
 
 // === Metadata Commands ===

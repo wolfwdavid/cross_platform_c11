@@ -6,6 +6,8 @@
 #include "sidebar/SidebarWidget.h"
 #include "FindOverlay.h"
 #include "StatusBar.h"
+#include "session/SessionPersistence.h"
+#include "theme/ThemeManager.h"
 
 #include <QMainWindow>
 
@@ -35,6 +37,7 @@ private:
     WorkspaceStackWidget *m_workspaceStack = nullptr;
     FindOverlay *m_findOverlay = nullptr;
     StatusBar *m_statusBar = nullptr;
+    SessionPersistence *m_sessionPersistence = nullptr;
 };
 
 } // namespace c11

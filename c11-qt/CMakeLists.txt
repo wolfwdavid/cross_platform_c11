@@ -22,6 +22,10 @@ set(C11_SOURCES
     src/panel/TerminalPanel.cpp
     src/panel/BrowserPanel.cpp
     src/panel/MarkdownPanel.cpp
+    src/session/SessionPersistence.cpp
+    src/theme/ThemeManager.cpp
+    src/mailbox/MailboxEnvelope.cpp
+    src/mailbox/MailboxDispatcher.cpp
     src/metadata/SurfaceMetadataStore.cpp
     src/metadata/PaneMetadataStore.cpp
     src/metadata/GitContextResolver.cpp

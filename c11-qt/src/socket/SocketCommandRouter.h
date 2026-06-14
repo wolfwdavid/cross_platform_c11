@@ -66,6 +66,11 @@ private:
     QJsonValue v2PaneList(const QJsonObject &params);
     QJsonValue v2BrowserOpen(const QJsonObject &params);
 
+    // Theme V2 commands
+    QJsonValue v2ThemeList(const QJsonObject &params);
+    QJsonValue v2ThemeGet(const QJsonObject &params);
+    QJsonValue v2ThemeSetActive(const QJsonObject &params);
+
     // Metadata V2 commands
     QJsonValue v2SurfaceSetMetadata(const QJsonObject &params);
     QJsonValue v2SurfaceGetMetadata(const QJsonObject &params);
