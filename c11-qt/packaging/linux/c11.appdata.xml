@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.stage11.c11</id>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+  <name>c11</name>
+  <summary>c11 terminal multiplexer</summary>
+  <description>
+    <p>
+      c11 is a terminal multiplexer for the operator:agent pair.
+      Terminals, browsers, and markdown surfaces composed in one window —
+      addressable, scriptable, held in one field of view while many agents
+      work in parallel.
+    </p>
+  </description>
+  <url type="homepage">https://github.com/Stage-11-Agentics/c11</url>
+  <url type="bugtracker">https://github.com/Stage-11-Agentics/c11/issues</url>
+  <launchable type="desktop-id">c11.desktop</launchable>
+  <categories>
+    <category>System</category>
+    <category>TerminalEmulator</category>
+  </categories>
+  <content_rating type="oars-1.1" />
+</component>

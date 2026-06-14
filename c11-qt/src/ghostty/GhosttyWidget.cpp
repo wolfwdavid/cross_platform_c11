@@ -11,6 +11,8 @@
 
 #ifdef Q_OS_MACOS
 #include "GhosttyNSViewBridge.h"
+#else
+#include "GhosttyQtPlatform.h"
 #endif
 
 namespace c11 {
@@ -70,8 +72,19 @@ bool GhosttyWidget::createSurface(const QString &workingDirectory,
     surfConfig.platform_tag = GHOSTTY_PLATFORM_MACOS;
     surfConfig.platform.macos.nsview = m_childNSView;
     surfConfig.userdata = this;
+#elif defined(Q_OS_LINUX)
+    // Linux: use GHOSTTY_PLATFORM_QT with OpenGL renderer.
+    // Requires the Ghostty fork to add GHOSTTY_PLATFORM_QT enum.
+    // Until then, stub mode handles the build.
+    if (!GhosttyQtPlatform::configureSurface(surfConfig,
+                                              reinterpret_cast<void *>(winId()),
+                                              devicePixelRatioF())) {
+        qWarning() << "Ghostty Qt platform not yet available on Linux";
+        return false;
+    }
+    surfConfig.userdata = this;
 #else
-    qWarning() << "Non-macOS Ghostty surface not yet supported";
+    qWarning() << "Ghostty surface not supported on this platform";
     return false;
 #endif
 
