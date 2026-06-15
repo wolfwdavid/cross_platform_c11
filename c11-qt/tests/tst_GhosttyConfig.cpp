@@ -10,7 +10,13 @@ private slots:
     void testDefaults()
     {
         GhosttyConfig config;
+#if defined(Q_OS_WIN)
+        QCOMPARE(config.fontFamily, "Cascadia Mono");
+#elif defined(Q_OS_MACOS)
         QCOMPARE(config.fontFamily, "Menlo");
+#else
+        QCOMPARE(config.fontFamily, "monospace");
+#endif
         QCOMPARE(config.fontSize, 12.0);
         QCOMPARE(config.scrollbackLimit, 10000);
         QCOMPARE(config.backgroundOpacity, 1.0);

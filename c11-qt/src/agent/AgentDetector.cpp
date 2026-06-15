@@ -4,7 +4,27 @@
 #include <QRegularExpression>
 #include <QDebug>
 
+#ifdef Q_OS_WIN
+#include <QtGlobal>
+#include <windows.h>
+#include <tlhelp32.h>
+#endif
+
 namespace c11 {
+
+namespace {
+// Human-friendly label for a detected agent type.
+QString agentDisplayName(const QString &type)
+{
+    if (type == "claude-code") return "Claude Code";
+    if (type == "codex") return "Codex";
+    if (type == "kimi") return "Kimi";
+    if (type == "opencode") return "OpenCode";
+    if (type == "grok") return "Grok";
+    if (type == "copilot") return "GitHub Copilot";
+    return type;
+}
+} // namespace
 
 AgentDetector &AgentDetector::instance()
 {
@@ -86,7 +106,30 @@ QList<AgentDetector::AgentInfo> AgentDetector::scanProcesses(const QString &ttyN
     QList<AgentInfo> results;
 
 #ifdef Q_OS_WIN
+    // Windows has no controlling TTY; enumerate processes and match agent
+    // binaries best-effort. Accurate per-panel attribution needs the live
+    // terminal's child-process tree (available once the Qt terminal renders).
     Q_UNUSED(ttyName);
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snapshot == INVALID_HANDLE_VALUE) return results;
+
+    PROCESSENTRY32W pe;
+    pe.dwSize = sizeof(pe);
+    if (Process32FirstW(snapshot, &pe)) {
+        do {
+            QString comm = QString::fromWCharArray(pe.szExeFile);
+            if (comm.endsWith(".exe", Qt::CaseInsensitive)) comm.chop(4);
+            QString type = agentTypeFromBinary(comm);
+            if (!type.isEmpty()) {
+                AgentInfo info;
+                info.type = type;
+                info.pid = static_cast<qint64>(pe.th32ProcessID);
+                info.displayName = agentDisplayName(type);
+                results.append(info);
+            }
+        } while (Process32NextW(snapshot, &pe));
+    }
+    CloseHandle(snapshot);
     return results;
 #else
     // Use ps to find processes on this TTY
@@ -110,13 +153,7 @@ QList<AgentDetector::AgentInfo> AgentDetector::scanProcesses(const QString &ttyN
             AgentInfo info;
             info.type = type;
             info.pid = pid;
-            if (type == "claude-code") info.displayName = "Claude Code";
-            else if (type == "codex") info.displayName = "Codex";
-            else if (type == "kimi") info.displayName = "Kimi";
-            else if (type == "opencode") info.displayName = "OpenCode";
-            else if (type == "grok") info.displayName = "Grok";
-            else if (type == "copilot") info.displayName = "GitHub Copilot";
-            else info.displayName = type;
+            info.displayName = agentDisplayName(type);
             results.append(info);
         }
     }

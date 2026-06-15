@@ -16,8 +16,14 @@ public:
     static GhosttyConfig load(ColorScheme scheme = currentSystemScheme());
     static ColorScheme currentSystemScheme();
 
-    // Font
+    // Font (per-OS default monospace family)
+#if defined(Q_OS_WIN)
+    QString fontFamily = "Cascadia Mono";
+#elif defined(Q_OS_MACOS)
     QString fontFamily = "Menlo";
+#else
+    QString fontFamily = "monospace";
+#endif
     double fontSize = 12.0;
 
     // Theme
