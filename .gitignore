@@ -66,3 +66,6 @@ artifacts/openai-cua-runs/
 /qt_install2.log
 /c11_build.log
 c11-qt/build_msvc.bat
+
+# Local planning scratch
+/tasks/
