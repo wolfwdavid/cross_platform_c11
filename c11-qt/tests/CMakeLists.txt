@@ -88,6 +88,7 @@ add_executable(test_workspace_manager
     ../src/ghostty/GhosttyKeyMapper.cpp
     ../src/ghostty/GhosttyRuntime.cpp
     ../src/ghostty/GhosttyConfig.cpp
+    $<$<NOT:$<PLATFORM_ID:Darwin>>:../src/ghostty/GhosttyGlContext.cpp>
 )
 
 target_include_directories(test_workspace_manager PRIVATE
@@ -156,6 +157,7 @@ add_executable(test_session_persistence
     ../src/ghostty/GhosttyKeyMapper.cpp
     ../src/ghostty/GhosttyRuntime.cpp
     ../src/ghostty/GhosttyConfig.cpp
+    $<$<NOT:$<PLATFORM_ID:Darwin>>:../src/ghostty/GhosttyGlContext.cpp>
     ../src/platform/PlatformAbstraction.cpp
     $<$<PLATFORM_ID:Windows>:../src/platform/platform_windows.cpp>
 )
@@ -193,3 +195,23 @@ target_link_libraries(test_mailbox_envelope PRIVATE
 )
 
 add_test(NAME MailboxEnvelopeTest COMMAND test_mailbox_envelope)
+
+# GhosttyGlContext / Qt-platform seam tests (non-Apple only).
+# Exercises desktop-GL context creation and ghostty_platform_qt_s marshalling.
+if(NOT APPLE)
+    add_executable(test_gl_context
+        tst_GhosttyGlContext.cpp
+        ../src/ghostty/GhosttyGlContext.cpp
+    )
+    target_include_directories(test_gl_context PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../
+    )
+    target_link_libraries(test_gl_context PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Widgets
+        Qt6::Test
+    )
+    add_test(NAME GlContextTest COMMAND test_gl_context)
+endif()

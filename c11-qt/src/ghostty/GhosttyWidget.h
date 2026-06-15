@@ -7,6 +7,11 @@
 #include <QWidget>
 #include <QString>
 
+#if defined(Q_OS_WIN) || defined(Q_OS_LINUX)
+#include "GhosttyGlContext.h"
+#include <memory>
+#endif
+
 namespace c11 {
 
 // QWidget that hosts a single Ghostty terminal surface.
@@ -62,7 +67,10 @@ private:
 
     GhosttyRuntime &m_runtime;
     ghostty_surface_t m_surface = nullptr;
-    void *m_childNSView = nullptr; // Child NSView for Ghostty Metal rendering
+    void *m_childNSView = nullptr; // Child NSView for Ghostty Metal rendering (macOS)
+#if defined(Q_OS_WIN) || defined(Q_OS_LINUX)
+    std::unique_ptr<GhosttyGlContext> m_glContext; // Host GL context (Qt platform)
+#endif
     GhosttyKeyMapper m_keyMapper;
     bool m_focused = false;
 };

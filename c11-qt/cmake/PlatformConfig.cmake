@@ -81,10 +81,14 @@ elseif(WIN32)
         shell32     # Shell APIs
         ole32       # COM (for notifications)
         shlwapi     # Path utilities
+        iphlpapi    # TCP table enumeration (PortScanner)
+        opengl32    # Desktop OpenGL (WGL) for the Ghostty Qt renderer
+        gdi32       # Device contexts (HDC) for WGL
     )
 
-    # OpenGL via ANGLE (bundled with Qt WebEngine on Windows)
-    # No extra linking needed — Qt's OpenGL wrapper handles ANGLE transparently.
-    add_compile_definitions(C11_HAS_ANGLE)
-    message(STATUS "Windows: ANGLE OpenGL provided by Qt WebEngine")
+    # Ghostty's renderer uses desktop OpenGL via WGL on Windows (Qt 6 no longer
+    # ships ANGLE). The GL context is created through Qt's QOpenGLContext
+    # (GhosttyGlContext) and handed to libghostty as a native HGLRC.
+    add_compile_definitions(C11_HAS_OPENGL)
+    message(STATUS "Windows: desktop OpenGL (WGL) for Ghostty Qt renderer")
 endif()

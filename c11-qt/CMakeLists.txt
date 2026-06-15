@@ -24,6 +24,7 @@ set(C11_SOURCES
     src/ghostty/GhosttyConfig.cpp
     src/ghostty/GhosttyWidget.cpp
     src/ghostty/GhosttyKeyMapper.cpp
+    $<$<NOT:$<PLATFORM_ID:Darwin>>:src/ghostty/GhosttyGlContext.cpp>
     src/panel/Panel.cpp
     src/panel/TerminalPanel.cpp
     src/panel/BrowserPanel.cpp

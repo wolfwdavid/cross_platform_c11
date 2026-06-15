@@ -73,14 +73,26 @@ bool GhosttyWidget::createSurface(const QString &workingDirectory,
     surfConfig.platform.macos.nsview = m_childNSView;
     surfConfig.userdata = this;
 #elif defined(Q_OS_LINUX) || defined(Q_OS_WIN)
-    // Linux: OpenGL renderer via GHOSTTY_PLATFORM_QT.
-    // Windows: OpenGL via ANGLE (bundled with Qt WebEngine), same path.
-    // Both require the Ghostty fork to add GHOSTTY_PLATFORM_QT enum.
-    if (!GhosttyQtPlatform::configureSurface(surfConfig,
-                                              reinterpret_cast<void *>(winId()),
-                                              devicePixelRatioF())) {
-        qWarning() << "Ghostty Qt platform not yet available on this OS";
+    // Linux/Windows: OpenGL renderer via GHOSTTY_PLATFORM_QT, fed a host-created
+    // desktop-GL context (WGL on Windows, GLX/EGL on Linux) — no ANGLE needed.
+    m_glContext = std::make_unique<GhosttyGlContext>();
+    if (!m_glContext->create(windowHandle())) {
+        qCritical() << "Failed to create OpenGL context for Ghostty Qt surface";
+        m_glContext.reset();
         return false;
+    }
+    {
+        const double dpr = devicePixelRatioF();
+        if (!GhosttyQtPlatform::configureSurface(
+                surfConfig, *m_glContext,
+                reinterpret_cast<void *>(winId()),
+                static_cast<uint32_t>(width() * dpr),
+                static_cast<uint32_t>(height() * dpr),
+                dpr)) {
+            qWarning() << "Ghostty Qt platform surface configuration failed";
+            m_glContext.reset();
+            return false;
+        }
     }
     surfConfig.userdata = this;
 #else
@@ -139,6 +151,9 @@ void GhosttyWidget::destroySurface()
         ghostty_bridge_destroy_child_nsview(m_childNSView);
         m_childNSView = nullptr;
     }
+#endif
+#if defined(Q_OS_WIN) || defined(Q_OS_LINUX)
+    m_glContext.reset();
 #endif
     emit surfaceDestroyed();
 #endif

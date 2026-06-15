@@ -1,64 +1,67 @@
 #pragma once
 
-// GhosttyQtPlatform: defines the interface for GHOSTTY_PLATFORM_QT.
+// GhosttyQtPlatform: configures a Ghostty surface for GHOSTTY_PLATFORM_QT.
 //
-// On Linux (and eventually Windows), Ghostty cannot use GHOSTTY_PLATFORM_MACOS.
-// Instead, a new platform enum GHOSTTY_PLATFORM_QT is added to ghostty.h with
-// a struct that provides the native window handle and OpenGL context.
+// On Linux/Windows, Ghostty cannot use GHOSTTY_PLATFORM_MACOS (NSView/Metal).
+// Instead it uses GHOSTTY_PLATFORM_QT with the OpenGL renderer, fed a native
+// window handle + a host-created GL context. The context is owned by a
+// GhosttyGlContext (see GhosttyGlContext.h); this header just marshals its
+// native handles into the ghostty_surface_config_s.
 //
-// This file documents the expected C API additions and provides the
-// Qt-side wrapper that would pass the right handles to Ghostty.
-//
-// STATUS: Stubbed. The actual Ghostty fork changes (adding the enum,
-// struct, and OpenGL renderer wiring in Zig) are tracked separately.
+// NOTE: this is the host (Qt) side of the contract. It is fully implemented and
+// compiles today, but a working terminal additionally requires a libghostty
+// built with a GHOSTTY_PLATFORM_QT renderer backend (tracked on the Ghostty
+// fork). Until that exists, GhosttyIntegration.cmake keeps the app in stub mode.
 
 #include "ghostty.h"
-#include <cstdint>
+#include <QtGlobal>
 
-// -- Expected additions to ghostty.h for GHOSTTY_PLATFORM_QT --
-//
-// typedef struct {
-//     void *native_window;    // X11: Window (uint64_t), Wayland: wl_surface*
-//     void *gl_context;       // EGL context or GLX context
-//     void *gl_display;       // EGL display or X11 Display*
-//     uint32_t width;
-//     uint32_t height;
-//     double scale_factor;
-//     bool is_wayland;
-// } ghostty_platform_qt_s;
-//
-// The ghostty_platform_u union gains a .qt member.
-// The ghostty_platform_e enum gains GHOSTTY_PLATFORM_QT.
+#if defined(Q_OS_LINUX) || defined(Q_OS_WIN)
+#include "GhosttyGlContext.h"
+#include <QGuiApplication>
+#include <cstdint>
+#endif
 
 namespace c11 {
 
-// Helper to configure a Ghostty surface for the Qt platform on Linux.
-// Extracts the native window handle from a QWidget and sets up the
-// surface config accordingly.
 struct GhosttyQtPlatform {
-    // Returns true if this build supports the Qt platform (Linux/Windows).
+    // True on platforms that use GHOSTTY_PLATFORM_QT (Linux/Windows).
     static bool isSupported()
     {
 #if defined(Q_OS_LINUX) || defined(Q_OS_WIN)
-        // Will be true once the Ghostty fork adds GHOSTTY_PLATFORM_QT
-        return false; // Stub: not yet available
+        return true;
 #else
         return false;
 #endif
     }
 
-    // Configure a surface config for the Qt platform.
-    // Returns false if the platform is not supported.
+#if defined(Q_OS_LINUX) || defined(Q_OS_WIN)
+    // Fill `config` for the Qt platform from a live GL context + native window.
+    // `nativeWindow` is the HWND (Windows) or X11 Window / wl_surface* (Linux),
+    // typically reinterpret_cast from QWidget::winId().
     static bool configureSurface(ghostty_surface_config_s &config,
-                                  void *nativeWindowHandle,
-                                  double scaleFactor)
+                                 GhosttyGlContext &glContext,
+                                 void *nativeWindow,
+                                 uint32_t width,
+                                 uint32_t height,
+                                 double scaleFactor)
     {
-        Q_UNUSED(config);
-        Q_UNUSED(nativeWindowHandle);
-        Q_UNUSED(scaleFactor);
-        // Stub: will be implemented when Ghostty adds GHOSTTY_PLATFORM_QT
-        return false;
+        if (!glContext.isValid()) return false;
+
+        config.platform_tag = GHOSTTY_PLATFORM_QT;
+        config.platform.qt.native_window = nativeWindow;
+        config.platform.qt.gl_context = glContext.nativeContext();
+        config.platform.qt.gl_display = glContext.nativeDisplay();
+        config.platform.qt.width = width;
+        config.platform.qt.height = height;
+        config.platform.qt.scale_factor = scaleFactor;
+        config.platform.qt.is_wayland =
+            (QGuiApplication::platformName() == QLatin1String("wayland"));
+
+        // A native GL context handle is required for the renderer to attach.
+        return config.platform.qt.gl_context != nullptr;
     }
+#endif
 };
 
 } // namespace c11
