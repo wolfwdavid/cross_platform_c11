@@ -34,7 +34,7 @@ public:
     // Create a context bound to an internal offscreen surface (tests / headless).
     bool createOffscreen();
 
-    bool isValid() const { return m_context != nullptr; }
+    bool isValid() const { return isValidImpl(); }
 
     bool makeCurrent();
     void doneCurrent();
@@ -49,7 +49,19 @@ public:
 
     QOpenGLContext *context() const { return m_context; }
 
+    bool isValidImpl() const;
+
 private:
+#if defined(Q_OS_WIN)
+    // On Windows we drive WGL directly for the on-screen window: Qt won't set a
+    // pixel format on a plain QWidget's (raster) HWND, so sharing its
+    // QOpenGLContext with that HWND fails wglMakeCurrent (ERROR_INVALID_PIXEL_FORMAT).
+    // Instead we ChoosePixelFormat/SetPixelFormat on the widget HWND ourselves and
+    // create a matching HGLRC. m_offscreen/m_context stay for the headless test path.
+    bool createWin32(QWindow *window);
+    void *m_wglContext = nullptr; // HGLRC owned by us (on-screen path)
+    void *m_hwnd = nullptr;       // HWND of the host window (not owned)
+#endif
     QOpenGLContext *m_context = nullptr;
     QOffscreenSurface *m_offscreen = nullptr;
     QSurface *m_surface = nullptr; // window (not owned) or m_offscreen (owned)
