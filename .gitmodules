@@ -1,6 +1,6 @@
 [submodule "ghostty"]
 	path = ghostty
-	url = https://github.com/Stage-11-Agentics/ghostty.git
+	url = https://github.com/wolfwdavid/ghostty.git
 	branch = main
 [submodule "homebrew-c11"]
 	path = homebrew-c11

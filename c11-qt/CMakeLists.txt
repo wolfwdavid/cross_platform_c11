@@ -94,6 +94,14 @@ set_target_properties(c11-app PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
+# Stage a prebuilt libghostty DLL next to the executable so it loads at runtime.
+if(C11_GHOSTTY_RUNTIME_DLL AND EXISTS "${C11_GHOSTTY_RUNTIME_DLL}")
+    add_custom_command(TARGET c11-app POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${C11_GHOSTTY_RUNTIME_DLL}" "$<TARGET_FILE_DIR:c11-app>"
+        COMMENT "Staging libghostty DLL next to c11.exe")
+endif()
+
 # macOS bundle
 if(APPLE)
     set_target_properties(c11-app PROPERTIES
