@@ -104,6 +104,9 @@ target_link_libraries(test_workspace_manager PRIVATE
     Qt6::Widgets
     Qt6::WebEngineWidgets
     Qt6::Test
+    # GhosttyGlContext.cpp uses raw WGL on Windows.
+    $<$<PLATFORM_ID:Windows>:opengl32>
+    $<$<PLATFORM_ID:Windows>:gdi32>
 )
 
 add_test(NAME WorkspaceManagerTest COMMAND test_workspace_manager)
@@ -175,6 +178,9 @@ target_link_libraries(test_session_persistence PRIVATE
     Qt6::Widgets
     Qt6::WebEngineWidgets
     Qt6::Test
+    # GhosttyGlContext.cpp uses raw WGL on Windows.
+    $<$<PLATFORM_ID:Windows>:opengl32>
+    $<$<PLATFORM_ID:Windows>:gdi32>
 )
 
 add_test(NAME SessionPersistenceTest COMMAND test_session_persistence)
@@ -212,6 +218,31 @@ if(NOT APPLE)
         Qt6::Gui
         Qt6::Widgets
         Qt6::Test
+        # GhosttyGlContext.cpp uses raw WGL on Windows.
+        $<$<PLATFORM_ID:Windows>:opengl32>
+        $<$<PLATFORM_ID:Windows>:gdi32>
     )
     add_test(NAME GlContextTest COMMAND test_gl_context)
+endif()
+
+# libghostty init smoke test. Walks the embedded C API startup sequence
+# (ghostty_init -> config_new -> finalize -> app_new) against a real linked
+# libghostty, catching ABI/runtime regressions in the embedding seam on this
+# platform. Only meaningful when a real libghostty is linked (the `ghostty`
+# target resolves real symbols), so it's gated on the prebuilt / build-from-source
+# paths; in stub mode those symbols don't exist and this would fail to link.
+if(NOT APPLE AND (C11_GHOSTTY_PREBUILT_DIR OR C11_BUILD_GHOSTTY))
+    add_executable(test_ghostty_init ghostty_probe.c)
+    target_include_directories(test_ghostty_init PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../  # for ghostty.h
+    )
+    target_link_libraries(test_ghostty_init PRIVATE ghostty)
+    # The DLL (Windows) must sit next to the test exe at run time.
+    if(C11_GHOSTTY_RUNTIME_DLL AND EXISTS "${C11_GHOSTTY_RUNTIME_DLL}")
+        add_custom_command(TARGET test_ghostty_init POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${C11_GHOSTTY_RUNTIME_DLL}" "$<TARGET_FILE_DIR:test_ghostty_init>"
+            COMMENT "Staging libghostty DLL next to test_ghostty_init")
+    endif()
+    add_test(NAME GhosttyInitSmokeTest COMMAND test_ghostty_init)
 endif()
