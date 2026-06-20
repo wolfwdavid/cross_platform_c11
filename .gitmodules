@@ -1,7 +1,7 @@
 [submodule "ghostty"]
 	path = ghostty
 	url = https://github.com/wolfwdavid/ghostty.git
-	branch = main
+	branch = windows-build-fixes
 [submodule "homebrew-c11"]
 	path = homebrew-c11
 	url = https://github.com/Stage-11-Agentics/homebrew-c11.git
