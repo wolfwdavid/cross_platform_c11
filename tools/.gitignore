@@ -1,0 +1,5 @@
+# Build artifacts and capture output from the screenshot helper.
+screenshot.exe
+*.obj
+*.out
+*.png
