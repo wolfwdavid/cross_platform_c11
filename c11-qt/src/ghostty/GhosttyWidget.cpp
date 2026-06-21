@@ -381,6 +381,19 @@ QVariant GhosttyWidget::inputMethodQuery(Qt::InputMethodQuery query) const
 
 bool GhosttyWidget::event(QEvent *event)
 {
+#if defined(Q_OS_WIN) && !defined(C11_GHOSTTY_STUB)
+    // Qt recreates a WA_NativeWindow widget's HWND when it is reparented (e.g.
+    // when a pane is moved into a new QSplitter during a split). The old HWND —
+    // and the pixel format + GL context bound to it — is destroyed. Re-establish
+    // the GL pixel format on the new HWND and tell libghostty to re-bind its
+    // (reused) context to it; the renderer picks up the change on its next frame.
+    if (event->type() == QEvent::WinIdChange && m_surface && m_glContext) {
+        if (void *hwnd = m_glContext->rebindWin32(windowHandle())) {
+            ghostty_surface_set_native_window(m_surface, hwnd);
+            updateSurfaceSize();
+        }
+    }
+#endif
     // Handle DPI changes
     if (event->type() == QEvent::DevicePixelRatioChange) {
         updateSurfaceSize();

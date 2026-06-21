@@ -61,6 +61,12 @@ private:
     bool createWin32(QWindow *window);
     void *m_wglContext = nullptr; // HGLRC owned by us (on-screen path)
     void *m_hwnd = nullptr;       // HWND of the host window (not owned)
+
+public:
+    // Re-establish the GL pixel format on a recreated HWND (after the host
+    // reparents the widget). Reuses the existing HGLRC. Returns the new HWND
+    // (to hand to libghostty) or nullptr on failure. Windows-only.
+    void *rebindWin32(QWindow *window);
 #endif
     QOpenGLContext *m_context = nullptr;
     QOffscreenSurface *m_offscreen = nullptr;

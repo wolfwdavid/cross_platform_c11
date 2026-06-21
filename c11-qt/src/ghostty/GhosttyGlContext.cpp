@@ -76,6 +76,41 @@ bool GhosttyGlContext::create(QWindow *window)
 }
 
 #if defined(Q_OS_WIN)
+// Ensure a GL-capable pixel format is set on the given HWND's DC. The pixel
+// format is a one-time, persistent property of the window; calling
+// SetPixelFormat twice fails, so we skip if one is already set (e.g. the same
+// PFD that the reused HGLRC was created with).
+static bool ensurePixelFormat(HWND hwnd)
+{
+    HDC hdc = GetDC(hwnd);
+    if (!hdc) { qCritical() << "GhosttyGlContext: GetDC failed"; return false; }
+
+    bool ok = true;
+    if (GetPixelFormat(hdc) == 0) {
+        PIXELFORMATDESCRIPTOR pfd{};
+        pfd.nSize = sizeof(pfd);
+        pfd.nVersion = 1;
+        pfd.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
+        pfd.iPixelType = PFD_TYPE_RGBA;
+        pfd.cColorBits = 32;
+        pfd.cAlphaBits = 8;
+        pfd.cDepthBits = 24;
+        pfd.cStencilBits = 8;
+        pfd.iLayerType = PFD_MAIN_PLANE;
+
+        const int pf = ChoosePixelFormat(hdc, &pfd);
+        if (pf == 0) {
+            qCritical() << "GhosttyGlContext: ChoosePixelFormat failed, err" << GetLastError();
+            ok = false;
+        } else if (!SetPixelFormat(hdc, pf, &pfd)) {
+            qCritical() << "GhosttyGlContext: SetPixelFormat failed, err" << GetLastError();
+            ok = false;
+        }
+    }
+    ReleaseDC(hwnd, hdc);
+    return ok;
+}
+
 // Set a GL-capable pixel format on the host window's HWND and create a matching
 // HGLRC via raw WGL. Doing it on the widget's own HWND (rather than borrowing
 // Qt's context, which is bound to an internal surface) means the pixel format
@@ -89,51 +124,35 @@ bool GhosttyGlContext::createWin32(QWindow *window)
         qCritical() << "GhosttyGlContext: window has no HWND";
         return false;
     }
+    if (!ensurePixelFormat(hwnd)) return false;
 
     HDC hdc = GetDC(hwnd);
-    if (!hdc) {
-        qCritical() << "GhosttyGlContext: GetDC failed";
-        return false;
-    }
-
-    PIXELFORMATDESCRIPTOR pfd{};
-    pfd.nSize = sizeof(pfd);
-    pfd.nVersion = 1;
-    pfd.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
-    pfd.iPixelType = PFD_TYPE_RGBA;
-    pfd.cColorBits = 32;
-    pfd.cAlphaBits = 8;
-    pfd.cDepthBits = 24;
-    pfd.cStencilBits = 8;
-    pfd.iLayerType = PFD_MAIN_PLANE;
-
-    const int pf = ChoosePixelFormat(hdc, &pfd);
-    if (pf == 0) {
-        qCritical() << "GhosttyGlContext: ChoosePixelFormat failed, err" << GetLastError();
-        ReleaseDC(hwnd, hdc);
-        return false;
-    }
-    if (!SetPixelFormat(hdc, pf, &pfd)) {
-        qCritical() << "GhosttyGlContext: SetPixelFormat failed, err" << GetLastError();
-        ReleaseDC(hwnd, hdc);
-        return false;
-    }
-
-    HGLRC rc = wglCreateContext(hdc);
+    HGLRC rc = hdc ? wglCreateContext(hdc) : nullptr;
+    if (hdc) ReleaseDC(hwnd, hdc);
     if (!rc) {
         qCritical() << "GhosttyGlContext: wglCreateContext failed, err" << GetLastError();
-        ReleaseDC(hwnd, hdc);
         return false;
     }
 
     // Leave the context not-current here; libghostty makes it current on its
-    // own (render thread, and the main thread during surface init). The pixel
-    // format we set persists on the HWND for every later GetDC(hwnd).
-    ReleaseDC(hwnd, hdc);
-
+    // own (render thread, and the main thread during surface init).
     m_hwnd = hwnd;
     m_wglContext = rc;
     return true;
+}
+
+// Re-point this context at a freshly created HWND (Qt recreates the native
+// window when a WA_NativeWindow widget is reparented during a split). The HGLRC
+// is reused: it only requires the new HWND's DC to carry the same pixel format,
+// which ensurePixelFormat sets. Returns the new HWND.
+void *GhosttyGlContext::rebindWin32(QWindow *window)
+{
+    if (!window) return nullptr;
+    HWND hwnd = reinterpret_cast<HWND>(window->winId());
+    if (!hwnd) return nullptr;
+    if (!ensurePixelFormat(hwnd)) return nullptr;
+    m_hwnd = hwnd;
+    return hwnd;
 }
 #endif
 
