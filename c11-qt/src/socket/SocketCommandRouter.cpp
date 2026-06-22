@@ -41,6 +41,7 @@ void SocketCommandRouter::registerCommands()
     m_v2Methods["system.ping"]         = [this](auto &p) { return v2SystemPing(p); };
     m_v2Methods["system.tree"]         = [this](auto &p) { return v2SystemTree(p); };
     m_v2Methods["system.capabilities"] = [this](auto &p) { return v2SystemCapabilities(p); };
+    m_v2Methods["system.identify"]     = [this](auto &p) { return v2SystemIdentify(p); };
     m_v2Methods["workspace.list"]      = [this](auto &p) { return v2WorkspaceList(p); };
     m_v2Methods["workspace.current"]   = [this](auto &p) { return v2WorkspaceCurrent(p); };
     m_v2Methods["workspace.create"]    = [this](auto &p) { return v2WorkspaceCreate(p); };
@@ -319,6 +320,35 @@ QJsonValue SocketCommandRouter::v2SystemCapabilities(const QJsonObject &)
     caps["markdown"] = true;
     caps["version"] = C11_VERSION;
     return caps;
+}
+
+QJsonValue SocketCommandRouter::v2SystemIdentify(const QJsonObject &params)
+{
+    // The caller's surface ref comes from its C11_SURFACE_ID env (injected at
+    // spawn) and is passed by the CLI; resolve it to full refs. The named pipe
+    // carries no identity on its own, so without that ref there's no caller.
+    QString idStr = params.value("surface").toString();
+    if (idStr.isEmpty()) idStr = params.value("id").toString();
+
+    QJsonObject caller;
+    if (!idStr.isEmpty()) {
+        const QUuid sid = QUuid::fromString(idStr);
+        if (!sid.isNull()) {
+            for (auto *ws : m_manager.workspaces()) {
+                if (auto *panel = ws->panel(sid)) {
+                    const QString ref = panel->id().toString(QUuid::WithoutBraces);
+                    caller["surface_ref"] = ref;
+                    caller["pane_ref"] = ref; // one surface per pane on c11-qt
+                    caller["workspace_ref"] = ws->id().toString(QUuid::WithoutBraces);
+                    caller["title"] = panel->displayTitle();
+                    caller["workspace_title"] = ws->effectiveTitle();
+                    break;
+                }
+            }
+        }
+    }
+
+    return QJsonObject{{"caller", caller}, {"has_caller", !caller.isEmpty()}};
 }
 
 QJsonValue SocketCommandRouter::v2WorkspaceList(const QJsonObject &)

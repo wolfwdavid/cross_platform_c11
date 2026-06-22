@@ -6,6 +6,8 @@
 
 #include <QWidget>
 #include <QString>
+#include <QList>
+#include <QPair>
 
 #if defined(Q_OS_WIN) || defined(Q_OS_LINUX)
 #include "GhosttyGlContext.h"
@@ -24,8 +26,11 @@ public:
     explicit GhosttyWidget(GhosttyRuntime &runtime, QWidget *parent = nullptr);
     ~GhosttyWidget() override;
 
+    // envVars are exported into the spawned shell (c11 injects C11_SURFACE_ID,
+    // C11_WORKSPACE_ID, C11_SHELL_INTEGRATION, C11_SOCKET so agents can self-locate).
     bool createSurface(const QString &workingDirectory = {},
                        const QString &command = {},
+                       const QList<QPair<QString, QString>> &envVars = {},
                        ghostty_surface_context_e context = GHOSTTY_SURFACE_CONTEXT_SPLIT);
 
     void destroySurface();

@@ -52,6 +52,7 @@ private:
     QJsonValue v2SystemPing(const QJsonObject &params);
     QJsonValue v2SystemTree(const QJsonObject &params);
     QJsonValue v2SystemCapabilities(const QJsonObject &params);
+    QJsonValue v2SystemIdentify(const QJsonObject &params);
     QJsonValue v2WorkspaceList(const QJsonObject &params);
     QJsonValue v2WorkspaceCurrent(const QJsonObject &params);
     QJsonValue v2WorkspaceCreate(const QJsonObject &params);

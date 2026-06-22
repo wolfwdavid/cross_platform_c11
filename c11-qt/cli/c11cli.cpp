@@ -102,6 +102,7 @@ int main(int argc, char *argv[])
                 << "  send                 Send text to a surface (--surface ID, --no-submit)\n"
                 << "  send-key             Send a key chord, e.g. ctrl+c, enter (--surface ID)\n"
                 << "  read-screen          Read a surface's text (--surface ID, --lines N, --scrollback)\n"
+                << "  identify             Show the calling surface's refs (from C11_SURFACE_ID)\n"
                 << "  open-browser         Open browser panel\n"
                 << "  capabilities         Show capabilities (V2)\n"
                 << "\nOptions:\n"
@@ -258,6 +259,36 @@ int main(int argc, char *argv[])
             } else {
                 out << doc.toJson(QJsonDocument::Indented); // error envelope
             }
+        } else {
+            out << response << "\n";
+        }
+        return 0;
+    }
+
+    // `identify` reports the calling surface's refs. The caller's identity comes
+    // from C11_SURFACE_ID (injected into the pane's shell at spawn); --surface
+    // overrides it.
+    if (command == "identify") {
+        QString surfaceId;
+        for (int i = 0; i < remaining.size(); ++i) {
+            const QString &a = remaining[i];
+            if (a == "--surface" && i + 1 < remaining.size()) surfaceId = remaining[++i];
+            else if (a.startsWith("--surface=")) surfaceId = a.mid(10);
+        }
+        if (surfaceId.isEmpty()) {
+            QByteArray sid = qgetenv("C11_SURFACE_ID");
+            if (sid.isEmpty()) sid = qgetenv("CMUX_SURFACE_ID");
+            surfaceId = QString::fromUtf8(sid);
+        }
+
+        QJsonObject params;
+        if (!surfaceId.isEmpty()) params["surface"] = surfaceId;
+
+        QString request = buildV2Request("system.identify", params);
+        QString response = sendCommand(socketPath, request);
+        QJsonDocument doc = QJsonDocument::fromJson(response.toUtf8());
+        if (!doc.isNull()) {
+            out << doc.toJson(QJsonDocument::Indented);
         } else {
             out << response << "\n";
         }

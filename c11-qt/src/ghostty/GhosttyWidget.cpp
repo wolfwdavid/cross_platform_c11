@@ -36,9 +36,11 @@ GhosttyWidget::~GhosttyWidget()
 
 bool GhosttyWidget::createSurface(const QString &workingDirectory,
                                     const QString &command,
+                                    const QList<QPair<QString, QString>> &envVars,
                                     ghostty_surface_context_e context)
 {
 #ifdef C11_GHOSTTY_STUB
+    Q_UNUSED(envVars);
     qDebug() << "GhosttyWidget: stub mode, no surface created";
     return true;
 #else
@@ -114,6 +116,24 @@ bool GhosttyWidget::createSurface(const QString &workingDirectory,
     if (!command.isEmpty()) {
         cmdBytes = command.toUtf8();
         surfConfig.command = cmdBytes.constData();
+    }
+
+    // Export env vars into the spawned shell. ghostty copies these during
+    // ghostty_surface_new, so the backing storage only needs to outlive the call.
+    QList<QByteArray> envBacking;
+    std::vector<ghostty_env_var_s> envCStrs;
+    if (!envVars.isEmpty()) {
+        envBacking.reserve(envVars.size() * 2);
+        envCStrs.reserve(envVars.size());
+        for (const auto &kv : envVars) {
+            envBacking.append(kv.first.toUtf8());
+            const char *key = envBacking.last().constData();
+            envBacking.append(kv.second.toUtf8());
+            const char *value = envBacking.last().constData();
+            envCStrs.push_back({key, value});
+        }
+        surfConfig.env_vars = envCStrs.data();
+        surfConfig.env_var_count = envCStrs.size();
     }
 
     m_surface = ghostty_surface_new(m_runtime.app(), &surfConfig);
