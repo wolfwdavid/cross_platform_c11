@@ -24,6 +24,8 @@ Check `C11_SHELL_INTEGRATION`. If set to `1`, you are inside c11; use native wor
 
 Other env vars available to child processes: `C11_WORKSPACE_ID`, `C11_SURFACE_ID`, `C11_TAB_ID`, `C11_SOCKET_PATH`, `C11_SOCKET_PASSWORD`. The spawning shell may also set `C11_AGENT_TYPE`, `C11_AGENT_MODEL`, and `C11_AGENT_TASK` to pre-seed agent declaration — read once at surface start.
 
+> **On Windows? This skill is macOS-first.** The Windows build (`c11-qt`) implements only a subset of these commands, and the detection/identity env vars above are **not** exported there. If you're on Windows (telltale: those env vars are empty and commands return JSON-RPC `{"ok":true,...}` instead of `OK …` lines), read **[references/windows-c11-qt.md](references/windows-c11-qt.md)** first for the supported subset before using any command below.
+
 ## Concepts
 
 - **Window** — top-level macOS window
@@ -684,6 +686,7 @@ If `c11` on your PATH does not resolve to the active bundle's CLI, run `c11 doct
 - **[references/metadata.md](references/metadata.md)** — metadata deep dive: socket methods, precedence table, all canonical keys, sidecar sources, consumer patterns
 - **[references/claude-resume.md](references/claude-resume.md)** — Claude session resume: operator-installed SessionStart hook and the `C11_SESSION_RESUME` gate
 - **[references/conversation.md](references/conversation.md)** — conversation store: `c11 conversation` CLI surface, lifecycle states (alive | suspended | tombstoned | unknown | unsupported), capture sources, ambiguity policy for hookless TUIs (Codex), strategies, the wrapper-claim flow
+- **[references/windows-c11-qt.md](references/windows-c11-qt.md)** — Windows (`c11-qt`) supported CLI subset: which commands work, the JSON-RPC envelope shape, named-pipe socket, and what's missing vs. this skill
 - **[../c11-browser/SKILL.md](../c11-browser/SKILL.md)** — c11 embedded browser automation
 - **[../c11-markdown/SKILL.md](../c11-markdown/SKILL.md)** — markdown surface viewer
 

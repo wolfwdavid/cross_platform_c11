@@ -99,6 +99,8 @@ int main(int argc, char *argv[])
                 << "  new-pane             Create new terminal pane\n"
                 << "  new-split            Split current pane\n"
                 << "  close-surface        Close surface/panel\n"
+                << "  send                 Send text to a surface (--surface ID, --no-submit)\n"
+                << "  send-key             Send a key chord, e.g. ctrl+c, enter (--surface ID)\n"
                 << "  open-browser         Open browser panel\n"
                 << "  capabilities         Show capabilities (V2)\n"
                 << "\nOptions:\n"
@@ -121,6 +123,105 @@ int main(int argc, char *argv[])
     }
 
     QString command = remaining.takeFirst();
+
+    // `send` has its own flags (--surface, --text, --no-submit, --) and free-form
+    // text that may contain spaces or leading dashes, so it gets dedicated parsing
+    // rather than the generic positional mapper below.
+    if (command == "send") {
+        QString surfaceId;
+        QString text;
+        bool haveText = false;
+        bool submit = true;
+        QStringList positional;
+
+        for (int i = 0; i < remaining.size(); ++i) {
+            const QString &a = remaining[i];
+            if (a == "--") {                       // everything after is literal text
+                positional << remaining.mid(i + 1);
+                break;
+            } else if (a == "--surface" && i + 1 < remaining.size()) {
+                surfaceId = remaining[++i];
+            } else if (a.startsWith("--surface=")) {
+                surfaceId = a.mid(10);
+            } else if (a == "--text" && i + 1 < remaining.size()) {
+                text = remaining[++i]; haveText = true;
+            } else if (a.startsWith("--text=")) {
+                text = a.mid(7); haveText = true;
+            } else if (a == "--no-submit") {
+                submit = false;
+            } else if (a == "--submit") {
+                submit = true;
+            } else if (a == "--workspace" && i + 1 < remaining.size()) {
+                ++i;                               // accepted for skill-compat; c11-qt targets by surface id
+            } else if (a.startsWith("--workspace=")) {
+                // accepted and ignored
+            } else {
+                positional << a;
+            }
+        }
+
+        if (!haveText) text = positional.join(" ");
+        if (text.isEmpty()) {
+            err << "Error: send requires text (positional, or --text)\n";
+            return 1;
+        }
+
+        QJsonObject params;
+        if (!surfaceId.isEmpty()) params["id"] = surfaceId;
+        params["text"] = text;
+        params["submit"] = submit;
+
+        QString request = buildV2Request("surface.send", params);
+        QString response = sendCommand(socketPath, request);
+        QJsonDocument doc = QJsonDocument::fromJson(response.toUtf8());
+        if (!doc.isNull()) {
+            out << doc.toJson(QJsonDocument::Indented);
+        } else {
+            out << response << "\n";
+        }
+        return 0;
+    }
+
+    // `send-key` takes a single chord (e.g. ctrl+c, enter) plus optional
+    // --surface / --workspace targeting.
+    if (command == "send-key") {
+        QString surfaceId;
+        QString chord;
+
+        for (int i = 0; i < remaining.size(); ++i) {
+            const QString &a = remaining[i];
+            if (a == "--surface" && i + 1 < remaining.size()) {
+                surfaceId = remaining[++i];
+            } else if (a.startsWith("--surface=")) {
+                surfaceId = a.mid(10);
+            } else if (a == "--workspace" && i + 1 < remaining.size()) {
+                ++i;                               // accepted for skill-compat
+            } else if (a.startsWith("--workspace=")) {
+                // accepted and ignored
+            } else if (chord.isEmpty()) {
+                chord = a;
+            }
+        }
+
+        if (chord.isEmpty()) {
+            err << "Error: send-key requires a chord (e.g. ctrl+c, enter)\n";
+            return 1;
+        }
+
+        QJsonObject params;
+        if (!surfaceId.isEmpty()) params["id"] = surfaceId;
+        params["key"] = chord;
+
+        QString request = buildV2Request("surface.send_key", params);
+        QString response = sendCommand(socketPath, request);
+        QJsonDocument doc = QJsonDocument::fromJson(response.toUtf8());
+        if (!doc.isNull()) {
+            out << doc.toJson(QJsonDocument::Indented);
+        } else {
+            out << response << "\n";
+        }
+        return 0;
+    }
 
     // V2 method map
     static const QMap<QString, QString> v2Methods = {

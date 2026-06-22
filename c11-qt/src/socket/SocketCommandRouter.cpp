@@ -52,6 +52,8 @@ void SocketCommandRouter::registerCommands()
     m_v2Methods["surface.create"]      = [this](auto &p) { return v2SurfaceCreate(p); };
     m_v2Methods["surface.split"]       = [this](auto &p) { return v2SurfaceSplit(p); };
     m_v2Methods["surface.close"]       = [this](auto &p) { return v2SurfaceClose(p); };
+    m_v2Methods["surface.send"]        = [this](auto &p) { return v2SurfaceSend(p); };
+    m_v2Methods["surface.send_key"]    = [this](auto &p) { return v2SurfaceSendKey(p); };
     m_v2Methods["pane.list"]           = [this](auto &p) { return v2PaneList(p); };
     m_v2Methods["browser.open_split"]  = [this](auto &p) { return v2BrowserOpen(p); };
     m_v2Methods["theme.list"]              = [this](auto &p) { return v2ThemeList(p); };
@@ -425,6 +427,85 @@ QJsonValue SocketCommandRouter::v2SurfaceClose(const QJsonObject &params)
     return QJsonValue(true);
 }
 
+QJsonValue SocketCommandRouter::v2SurfaceSend(const QJsonObject &params)
+{
+    // text is required; submit defaults to true (type the text AND press Return).
+    if (!params.contains("text")) {
+        return QJsonObject{{"error", "missing_text"},
+                           {"message", "send requires a 'text' param"}};
+    }
+    const QString text = params.value("text").toString();
+    const bool submit = params.value("submit").toBool(true);
+
+    // Target: explicit id/surface ref, else the focused panel.
+    QString idStr = params.value("id").toString();
+    if (idStr.isEmpty()) idStr = params.value("surface").toString();
+
+    auto *panel = resolvePanel(idStr);
+    if (!panel) {
+        return QJsonObject{{"error", "not_found"},
+                           {"message", "No surface matches the given ref"}};
+    }
+    auto *term = dynamic_cast<TerminalPanel *>(panel);
+    if (!term) {
+        return QJsonObject{{"error", "not_a_terminal"},
+                           {"message", "Target surface is not a terminal"}};
+    }
+    auto *widget = term->ghosttyWidget();
+    if (!widget) {
+        return QJsonObject{{"error", "no_surface"},
+                           {"message", "Terminal has no live surface"}};
+    }
+
+    widget->sendText(text);
+    if (submit) widget->sendEnter();
+
+    return QJsonObject{{"ok", true},
+                       {"surface", panel->id().toString(QUuid::WithoutBraces)},
+                       {"sent", text.size()},
+                       {"submitted", submit}};
+}
+
+QJsonValue SocketCommandRouter::v2SurfaceSendKey(const QJsonObject &params)
+{
+    const QString chord = params.value("key").toString();
+    if (chord.isEmpty()) {
+        return QJsonObject{{"error", "missing_key"},
+                           {"message", "send-key requires a 'key' chord"}};
+    }
+
+    GhosttyKeyMapper::Chord parsed;
+    if (!GhosttyKeyMapper::parseChord(chord, parsed)) {
+        return QJsonObject{{"error", "bad_key"},
+                           {"message", "Unrecognized key chord: " + chord}};
+    }
+
+    QString idStr = params.value("id").toString();
+    if (idStr.isEmpty()) idStr = params.value("surface").toString();
+
+    auto *panel = resolvePanel(idStr);
+    if (!panel) {
+        return QJsonObject{{"error", "not_found"},
+                           {"message", "No surface matches the given ref"}};
+    }
+    auto *term = dynamic_cast<TerminalPanel *>(panel);
+    if (!term) {
+        return QJsonObject{{"error", "not_a_terminal"},
+                           {"message", "Target surface is not a terminal"}};
+    }
+    auto *widget = term->ghosttyWidget();
+    if (!widget) {
+        return QJsonObject{{"error", "no_surface"},
+                           {"message", "Terminal has no live surface"}};
+    }
+
+    widget->sendKey(parsed.keycode, parsed.mods, parsed.unshifted_codepoint);
+
+    return QJsonObject{{"ok", true},
+                       {"surface", panel->id().toString(QUuid::WithoutBraces)},
+                       {"key", chord}};
+}
+
 QJsonValue SocketCommandRouter::v2PaneList(const QJsonObject &)
 {
     auto *ws = m_manager.selectedWorkspace();
@@ -538,6 +619,20 @@ QJsonValue SocketCommandRouter::v2SurfaceClearMetadata(const QJsonObject &params
 }
 
 // === Helpers ===
+
+Panel *SocketCommandRouter::resolvePanel(const QString &idStr) const
+{
+    if (idStr.isEmpty()) {
+        auto *ws = m_manager.selectedWorkspace();
+        return ws ? ws->panel(ws->focusedPanelId()) : nullptr;
+    }
+    QUuid id = QUuid::fromString(idStr);
+    if (id.isNull()) return nullptr;
+    for (auto *ws : m_manager.workspaces()) {
+        if (auto *panel = ws->panel(id)) return panel;
+    }
+    return nullptr;
+}
 
 QJsonObject SocketCommandRouter::workspaceToJson(const Workspace *ws) const
 {

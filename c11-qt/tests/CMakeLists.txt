@@ -242,6 +242,50 @@ target_link_libraries(test_mailbox_envelope PRIVATE
 
 add_test(NAME MailboxEnvelopeTest COMMAND test_mailbox_envelope)
 
+# SocketCommandRouter unit tests — surface.send routing + targeting seam.
+add_executable(test_socket_router
+    tst_SocketCommandRouter.cpp
+    ../src/socket/SocketCommandRouter.cpp
+    ../src/socket/SocketProtocol.cpp
+    ../src/metadata/SurfaceMetadataStore.cpp
+    ../src/theme/ThemeManager.cpp
+    ../src/workspace/WorkspaceManager.cpp
+    ../src/workspace/Workspace.cpp
+    ../src/workspace/PaneLayout.cpp
+    ../src/panel/Panel.cpp
+    ../src/panel/TerminalPanel.cpp
+    ../src/panel/BrowserPanel.cpp
+    ../src/panel/MarkdownPanel.cpp
+    ../src/ghostty/GhosttyWidget.cpp
+    ../src/ghostty/GhosttyKeyMapper.cpp
+    ../src/ghostty/GhosttyRuntime.cpp
+    ../src/ghostty/GhosttyConfig.cpp
+    $<$<NOT:$<PLATFORM_ID:Darwin>>:../src/ghostty/GhosttyGlContext.cpp>
+)
+
+target_include_directories(test_socket_router PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../
+)
+
+target_compile_definitions(test_socket_router PRIVATE
+    C11_GHOSTTY_STUB
+    C11_VERSION="${PROJECT_VERSION}" # SocketCommandRouter reports it in capabilities
+)
+
+target_link_libraries(test_socket_router PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::WebEngineWidgets
+    Qt6::Test
+    # GhosttyGlContext.cpp uses raw WGL on Windows.
+    $<$<PLATFORM_ID:Windows>:opengl32>
+    $<$<PLATFORM_ID:Windows>:gdi32>
+)
+
+add_test(NAME SocketCommandRouterTest COMMAND test_socket_router)
+
 # GhosttyGlContext / Qt-platform seam tests (non-Apple only).
 # Exercises desktop-GL context creation and ghostty_platform_qt_s marshalling.
 if(NOT APPLE)
