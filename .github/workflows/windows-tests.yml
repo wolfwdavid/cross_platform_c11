@@ -36,7 +36,9 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
-          version: '6.11.1'
+          # Newest version available on the aqt mirror (the dev machine uses
+          # 6.11.x from a non-aqt source; the code builds fine against 6.9.x).
+          version: '6.9.3'
           host: windows
           target: desktop
           arch: win64_msvc2022_64
