@@ -111,6 +111,46 @@ target_link_libraries(test_workspace_manager PRIVATE
 
 add_test(NAME WorkspaceManagerTest COMMAND test_workspace_manager)
 
+# StatusBar unit tests (stub mode). Verifies the pane counter tracks panel
+# add/remove on the selected workspace, including the one selected at the time
+# the bar is constructed (regression for the stale-counter bug).
+add_executable(test_status_bar
+    tst_StatusBar.cpp
+    ../src/ui/StatusBar.cpp
+    ../src/workspace/WorkspaceManager.cpp
+    ../src/workspace/Workspace.cpp
+    ../src/workspace/PaneLayout.cpp
+    ../src/panel/Panel.cpp
+    ../src/panel/TerminalPanel.cpp
+    ../src/panel/BrowserPanel.cpp
+    ../src/panel/MarkdownPanel.cpp
+    ../src/ghostty/GhosttyWidget.cpp
+    ../src/ghostty/GhosttyKeyMapper.cpp
+    ../src/ghostty/GhosttyRuntime.cpp
+    ../src/ghostty/GhosttyConfig.cpp
+    $<$<NOT:$<PLATFORM_ID:Darwin>>:../src/ghostty/GhosttyGlContext.cpp>
+)
+
+target_include_directories(test_status_bar PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../
+)
+
+target_compile_definitions(test_status_bar PRIVATE C11_GHOSTTY_STUB)
+
+target_link_libraries(test_status_bar PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::WebEngineWidgets
+    Qt6::Test
+    # GhosttyGlContext.cpp uses raw WGL on Windows.
+    $<$<PLATFORM_ID:Windows>:opengl32>
+    $<$<PLATFORM_ID:Windows>:gdi32>
+)
+
+add_test(NAME StatusBarTest COMMAND test_status_bar)
+
 # SocketProtocol unit tests
 add_executable(test_socket_protocol
     tst_SocketProtocol.cpp
