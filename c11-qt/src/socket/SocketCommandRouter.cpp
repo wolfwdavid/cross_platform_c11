@@ -195,7 +195,7 @@ QString SocketCommandRouter::cmdNewPane(const QStringList &args)
     auto *ws = m_manager.selectedWorkspace();
     if (!ws) return SocketProtocol::v1Error("No workspace");
     QString wd = SocketProtocol::v1Arg(args, "cwd");
-    auto *panel = ws->createTerminalPanel(wd);
+    auto *panel = ws->addPane(wd);
     return panel->id().toString(QUuid::WithoutBraces) + "\n";
 }
 
@@ -398,7 +398,7 @@ QJsonValue SocketCommandRouter::v2SurfaceCreate(const QJsonObject &params)
     auto *ws = m_manager.selectedWorkspace();
     if (!ws) return QJsonValue();
     QString cwd = params.value("cwd").toString();
-    auto *panel = ws->createTerminalPanel(cwd);
+    auto *panel = ws->addPane(cwd);
     return panelToJson(panel);
 }
 
