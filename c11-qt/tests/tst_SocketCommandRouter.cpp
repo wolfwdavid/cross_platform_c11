@@ -186,6 +186,88 @@ private slots:
             sendKeyLine(QUuid::createUuid().toString(QUuid::WithoutBraces), "enter")));
         QCOMPARE(result.value("error").toString(), QString("not_found"));
     }
+
+    // --- surface.read_screen ---
+
+    static QString readScreenLine(const QString &id)
+    {
+        QJsonObject params;
+        if (!id.isEmpty()) params["id"] = id;
+        QJsonObject req;
+        req["id"] = 1;
+        req["method"] = "surface.read_screen";
+        req["params"] = params;
+        return QString::fromUtf8(QJsonDocument(req).toJson(QJsonDocument::Compact));
+    }
+
+    void readScreenReturnsTextField()
+    {
+        WorkspaceManager mgr(*m_runtime);
+        auto *ws = mgr.addWorkspace("WS");
+        auto *panel = ws->createTerminalPanel();
+        const QString pid = panel->id().toString(QUuid::WithoutBraces);
+
+        SocketCommandRouter router(mgr);
+        auto result = resultOf(router.processLine(readScreenLine(pid)));
+
+        QVERIFY(result.value("ok").toBool());
+        QCOMPARE(result.value("surface").toString(), pid);
+        // Stub build: no live surface text, but the field is always present.
+        QVERIFY(result.contains("text"));
+    }
+
+    void readScreenMissingSurfaceErrors()
+    {
+        WorkspaceManager mgr(*m_runtime);
+        mgr.addWorkspace("WS");
+
+        SocketCommandRouter router(mgr);
+        auto result = resultOf(router.processLine(
+            readScreenLine(QUuid::createUuid().toString(QUuid::WithoutBraces))));
+        QCOMPARE(result.value("error").toString(), QString("not_found"));
+    }
+
+    // --- system.identify ---
+
+    static QString identifyLine(const QString &surfaceId)
+    {
+        QJsonObject params;
+        if (!surfaceId.isEmpty()) params["surface"] = surfaceId;
+        QJsonObject req;
+        req["id"] = 1;
+        req["method"] = "system.identify";
+        req["params"] = params;
+        return QString::fromUtf8(QJsonDocument(req).toJson(QJsonDocument::Compact));
+    }
+
+    void identifyResolvesCaller()
+    {
+        WorkspaceManager mgr(*m_runtime);
+        auto *ws = mgr.addWorkspace("WS");
+        auto *panel = ws->createTerminalPanel();
+        const QString pid = panel->id().toString(QUuid::WithoutBraces);
+        const QString wid = ws->id().toString(QUuid::WithoutBraces);
+
+        SocketCommandRouter router(mgr);
+        auto result = resultOf(router.processLine(identifyLine(pid)));
+
+        QVERIFY(result.value("has_caller").toBool());
+        const QJsonObject caller = result.value("caller").toObject();
+        QCOMPARE(caller.value("surface_ref").toString(), pid);
+        QCOMPARE(caller.value("pane_ref").toString(), pid);
+        QCOMPARE(caller.value("workspace_ref").toString(), wid);
+    }
+
+    void identifyUnknownCallerIsEmpty()
+    {
+        WorkspaceManager mgr(*m_runtime);
+        mgr.addWorkspace("WS");
+
+        SocketCommandRouter router(mgr);
+        auto result = resultOf(router.processLine(
+            identifyLine(QUuid::createUuid().toString(QUuid::WithoutBraces))));
+        QVERIFY(!result.value("has_caller").toBool());
+    }
 };
 
 QTEST_MAIN(TestSocketCommandRouter)

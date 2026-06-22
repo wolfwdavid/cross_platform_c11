@@ -36,9 +36,11 @@ GhosttyWidget::~GhosttyWidget()
 
 bool GhosttyWidget::createSurface(const QString &workingDirectory,
                                     const QString &command,
+                                    const QList<QPair<QString, QString>> &envVars,
                                     ghostty_surface_context_e context)
 {
 #ifdef C11_GHOSTTY_STUB
+    Q_UNUSED(envVars);
     qDebug() << "GhosttyWidget: stub mode, no surface created";
     return true;
 #else
@@ -114,6 +116,24 @@ bool GhosttyWidget::createSurface(const QString &workingDirectory,
     if (!command.isEmpty()) {
         cmdBytes = command.toUtf8();
         surfConfig.command = cmdBytes.constData();
+    }
+
+    // Export env vars into the spawned shell. ghostty copies these during
+    // ghostty_surface_new, so the backing storage only needs to outlive the call.
+    QList<QByteArray> envBacking;
+    std::vector<ghostty_env_var_s> envCStrs;
+    if (!envVars.isEmpty()) {
+        envBacking.reserve(envVars.size() * 2);
+        envCStrs.reserve(envVars.size());
+        for (const auto &kv : envVars) {
+            envBacking.append(kv.first.toUtf8());
+            const char *key = envBacking.last().constData();
+            envBacking.append(kv.second.toUtf8());
+            const char *value = envBacking.last().constData();
+            envCStrs.push_back({key, value});
+        }
+        surfConfig.env_vars = envCStrs.data();
+        surfConfig.env_var_count = envCStrs.size();
     }
 
     m_surface = ghostty_surface_new(m_runtime.app(), &surfConfig);
@@ -215,6 +235,39 @@ void GhosttyWidget::sendEnter()
     sendKey(0x1C, GHOSTTY_MODS_NONE);
 #else
     sendKey(0x24, GHOSTTY_MODS_NONE);
+#endif
+}
+
+QString GhosttyWidget::readScreen(bool scrollback) const
+{
+#ifndef C11_GHOSTTY_STUB
+    if (!m_surface) return QString();
+
+    // Select the whole region: TOP_LEFT→BOTTOM_RIGHT pseudo-coords span the full
+    // extent of the tag (visible viewport, or the entire screen incl. scrollback)
+    // without needing exact dimensions.
+    const ghostty_point_tag_e tag =
+        scrollback ? GHOSTTY_POINT_SCREEN : GHOSTTY_POINT_VIEWPORT;
+
+    ghostty_selection_s sel{};
+    sel.top_left.tag = tag;
+    sel.top_left.coord = GHOSTTY_POINT_COORD_TOP_LEFT;
+    sel.bottom_right.tag = tag;
+    sel.bottom_right.coord = GHOSTTY_POINT_COORD_BOTTOM_RIGHT;
+    sel.rectangle = false;
+
+    ghostty_text_s text{};
+    if (!ghostty_surface_read_text(m_surface, sel, &text)) return QString();
+
+    QString result;
+    if (text.text && text.text_len > 0) {
+        result = QString::fromUtf8(text.text, static_cast<int>(text.text_len));
+    }
+    ghostty_surface_free_text(m_surface, &text);
+    return result;
+#else
+    Q_UNUSED(scrollback);
+    return QString();
 #endif
 }
 

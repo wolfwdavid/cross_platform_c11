@@ -52,6 +52,7 @@ private:
     QJsonValue v2SystemPing(const QJsonObject &params);
     QJsonValue v2SystemTree(const QJsonObject &params);
     QJsonValue v2SystemCapabilities(const QJsonObject &params);
+    QJsonValue v2SystemIdentify(const QJsonObject &params);
     QJsonValue v2WorkspaceList(const QJsonObject &params);
     QJsonValue v2WorkspaceCurrent(const QJsonObject &params);
     QJsonValue v2WorkspaceCreate(const QJsonObject &params);
@@ -65,6 +66,7 @@ private:
     QJsonValue v2SurfaceClose(const QJsonObject &params);
     QJsonValue v2SurfaceSend(const QJsonObject &params);
     QJsonValue v2SurfaceSendKey(const QJsonObject &params);
+    QJsonValue v2SurfaceReadScreen(const QJsonObject &params);
     QJsonValue v2PaneList(const QJsonObject &params);
     QJsonValue v2BrowserOpen(const QJsonObject &params);
 

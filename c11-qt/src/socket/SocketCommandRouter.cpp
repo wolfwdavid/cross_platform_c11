@@ -41,6 +41,7 @@ void SocketCommandRouter::registerCommands()
     m_v2Methods["system.ping"]         = [this](auto &p) { return v2SystemPing(p); };
     m_v2Methods["system.tree"]         = [this](auto &p) { return v2SystemTree(p); };
     m_v2Methods["system.capabilities"] = [this](auto &p) { return v2SystemCapabilities(p); };
+    m_v2Methods["system.identify"]     = [this](auto &p) { return v2SystemIdentify(p); };
     m_v2Methods["workspace.list"]      = [this](auto &p) { return v2WorkspaceList(p); };
     m_v2Methods["workspace.current"]   = [this](auto &p) { return v2WorkspaceCurrent(p); };
     m_v2Methods["workspace.create"]    = [this](auto &p) { return v2WorkspaceCreate(p); };
@@ -54,6 +55,7 @@ void SocketCommandRouter::registerCommands()
     m_v2Methods["surface.close"]       = [this](auto &p) { return v2SurfaceClose(p); };
     m_v2Methods["surface.send"]        = [this](auto &p) { return v2SurfaceSend(p); };
     m_v2Methods["surface.send_key"]    = [this](auto &p) { return v2SurfaceSendKey(p); };
+    m_v2Methods["surface.read_screen"] = [this](auto &p) { return v2SurfaceReadScreen(p); };
     m_v2Methods["pane.list"]           = [this](auto &p) { return v2PaneList(p); };
     m_v2Methods["browser.open_split"]  = [this](auto &p) { return v2BrowserOpen(p); };
     m_v2Methods["theme.list"]              = [this](auto &p) { return v2ThemeList(p); };
@@ -320,6 +322,35 @@ QJsonValue SocketCommandRouter::v2SystemCapabilities(const QJsonObject &)
     return caps;
 }
 
+QJsonValue SocketCommandRouter::v2SystemIdentify(const QJsonObject &params)
+{
+    // The caller's surface ref comes from its C11_SURFACE_ID env (injected at
+    // spawn) and is passed by the CLI; resolve it to full refs. The named pipe
+    // carries no identity on its own, so without that ref there's no caller.
+    QString idStr = params.value("surface").toString();
+    if (idStr.isEmpty()) idStr = params.value("id").toString();
+
+    QJsonObject caller;
+    if (!idStr.isEmpty()) {
+        const QUuid sid = QUuid::fromString(idStr);
+        if (!sid.isNull()) {
+            for (auto *ws : m_manager.workspaces()) {
+                if (auto *panel = ws->panel(sid)) {
+                    const QString ref = panel->id().toString(QUuid::WithoutBraces);
+                    caller["surface_ref"] = ref;
+                    caller["pane_ref"] = ref; // one surface per pane on c11-qt
+                    caller["workspace_ref"] = ws->id().toString(QUuid::WithoutBraces);
+                    caller["title"] = panel->displayTitle();
+                    caller["workspace_title"] = ws->effectiveTitle();
+                    break;
+                }
+            }
+        }
+    }
+
+    return QJsonObject{{"caller", caller}, {"has_caller", !caller.isEmpty()}};
+}
+
 QJsonValue SocketCommandRouter::v2WorkspaceList(const QJsonObject &)
 {
     QJsonArray arr;
@@ -504,6 +535,42 @@ QJsonValue SocketCommandRouter::v2SurfaceSendKey(const QJsonObject &params)
     return QJsonObject{{"ok", true},
                        {"surface", panel->id().toString(QUuid::WithoutBraces)},
                        {"key", chord}};
+}
+
+QJsonValue SocketCommandRouter::v2SurfaceReadScreen(const QJsonObject &params)
+{
+    QString idStr = params.value("id").toString();
+    if (idStr.isEmpty()) idStr = params.value("surface").toString();
+
+    auto *panel = resolvePanel(idStr);
+    if (!panel) {
+        return QJsonObject{{"error", "not_found"},
+                           {"message", "No surface matches the given ref"}};
+    }
+    auto *term = dynamic_cast<TerminalPanel *>(panel);
+    if (!term) {
+        return QJsonObject{{"error", "not_a_terminal"},
+                           {"message", "Target surface is not a terminal"}};
+    }
+    auto *widget = term->ghosttyWidget();
+    if (!widget) {
+        return QJsonObject{{"error", "no_surface"},
+                           {"message", "Terminal has no live surface"}};
+    }
+
+    QString text = widget->readScreen(params.value("scrollback").toBool(false));
+
+    // Optional: keep only the last N lines.
+    const int lines = params.value("lines").toInt(0);
+    if (lines > 0) {
+        QStringList parts = text.split('\n');
+        if (parts.size() > lines) parts = parts.mid(parts.size() - lines);
+        text = parts.join('\n');
+    }
+
+    return QJsonObject{{"ok", true},
+                       {"surface", panel->id().toString(QUuid::WithoutBraces)},
+                       {"text", text}};
 }
 
 QJsonValue SocketCommandRouter::v2PaneList(const QJsonObject &)

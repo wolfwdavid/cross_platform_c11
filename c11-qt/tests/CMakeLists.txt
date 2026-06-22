@@ -89,6 +89,8 @@ add_executable(test_workspace_manager
     ../src/ghostty/GhosttyRuntime.cpp
     ../src/ghostty/GhosttyConfig.cpp
     $<$<NOT:$<PLATFORM_ID:Darwin>>:../src/ghostty/GhosttyGlContext.cpp>
+    ../src/platform/PlatformAbstraction.cpp
+    $<$<PLATFORM_ID:Windows>:../src/platform/platform_windows.cpp>
 )
 
 target_include_directories(test_workspace_manager PRIVATE
@@ -129,6 +131,8 @@ add_executable(test_status_bar
     ../src/ghostty/GhosttyRuntime.cpp
     ../src/ghostty/GhosttyConfig.cpp
     $<$<NOT:$<PLATFORM_ID:Darwin>>:../src/ghostty/GhosttyGlContext.cpp>
+    ../src/platform/PlatformAbstraction.cpp
+    $<$<PLATFORM_ID:Windows>:../src/platform/platform_windows.cpp>
 )
 
 target_include_directories(test_status_bar PRIVATE
@@ -261,6 +265,8 @@ add_executable(test_socket_router
     ../src/ghostty/GhosttyRuntime.cpp
     ../src/ghostty/GhosttyConfig.cpp
     $<$<NOT:$<PLATFORM_ID:Darwin>>:../src/ghostty/GhosttyGlContext.cpp>
+    ../src/platform/PlatformAbstraction.cpp
+    $<$<PLATFORM_ID:Windows>:../src/platform/platform_windows.cpp>
 )
 
 target_include_directories(test_socket_router PRIVATE
