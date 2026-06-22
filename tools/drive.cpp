@@ -57,6 +57,19 @@ static void typeUnicode(const char* utf8) {
     }
 }
 
+// Click at a point given in CLIENT coordinates of the c11 window.
+static void clickClient(HWND hwnd, int cx, int cy) {
+    forceForeground(hwnd);
+    POINT pt{cx, cy};
+    ClientToScreen(hwnd, &pt);
+    SetCursorPos(pt.x, pt.y);
+    Sleep(60);
+    INPUT in[2] = {};
+    in[0].type = INPUT_MOUSE; in[0].mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
+    in[1].type = INPUT_MOUSE; in[1].mi.dwFlags = MOUSEEVENTF_LEFTUP;
+    SendInput(2, in, sizeof(INPUT));
+}
+
 static void pressVk(WORD vk) {
     INPUT in[2] = {};
     in[0].type = INPUT_KEYBOARD; in[0].ki.wVk = vk;
@@ -86,6 +99,8 @@ int main(int argc, char** argv) {
     } else if (strcmp(cmd, "resize") == 0 && argc >= 4) {
         int w = atoi(argv[2]), h = atoi(argv[3]);
         SetWindowPos(hwnd, NULL, 0, 0, w, h, SWP_NOMOVE | SWP_NOZORDER);
+    } else if (strcmp(cmd, "click") == 0 && argc >= 4) {
+        clickClient(hwnd, atoi(argv[2]), atoi(argv[3]));
     } else {
         printf("bad args\n"); return 2;
     }

@@ -46,6 +46,7 @@ signals:
     void titleChanged(const QString &title);
 
 protected:
+    void showEvent(QShowEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
     void focusInEvent(QFocusEvent *event) override;
     void focusOutEvent(QFocusEvent *event) override;
@@ -62,6 +63,9 @@ protected:
 
 private:
     void updateSurfaceSize();
+    // Schedule a small burst of deferred redraws so a reparented surface
+    // (e.g. after a split) reliably repaints once its window is composited.
+    void scheduleSurfaceRepaint();
     ghostty_input_mods_e qtModsToGhostty(Qt::KeyboardModifiers mods) const;
     ghostty_input_mouse_button_e qtButtonToGhostty(Qt::MouseButton button) const;
 

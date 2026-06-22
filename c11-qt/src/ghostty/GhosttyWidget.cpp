@@ -1,6 +1,7 @@
 #include "GhosttyWidget.h"
 
 #include <QResizeEvent>
+#include <QShowEvent>
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QWheelEvent>
@@ -221,6 +222,45 @@ void GhosttyWidget::updateSurfaceSize()
 
 // --- Event handlers ---
 
+void GhosttyWidget::scheduleSurfaceRepaint()
+{
+#ifndef C11_GHOSTTY_STUB
+    if (!m_surface) return;
+    // A split/layout rebuild reparents this widget, recreating its native window
+    // and (on Windows) leaving it with an empty back buffer. The surface keeps
+    // its render context, but while unfocused it has no cursor-blink timer to
+    // drive a redraw, so it stays blank until something forces one. A single
+    // deferred redraw is racy: if it lands before the reparented window is
+    // actually composited it is lost and never retried. Kick a few redraws
+    // across the settle window so at least one lands after the window is visible.
+    // (A static unfocused pane needs only one good frame; the extra refreshes are
+    // cheap and the surface returns to idle afterwards.)
+    for (int delay : {0, 100, 300, 600}) {
+        QTimer::singleShot(delay, this, [this]() {
+            if (!m_surface) return;
+#if defined(Q_OS_WIN)
+            // Re-assert the (possibly recreated) native window so libghostty
+            // binds and presents to the visible HWND, not a stale one.
+            if (m_glContext) {
+                if (auto *wh = windowHandle()) {
+                    if (void *hwnd = m_glContext->rebindWin32(wh))
+                        ghostty_surface_set_native_window(m_surface, hwnd);
+                }
+            }
+#endif
+            updateSurfaceSize();
+            ghostty_surface_refresh(m_surface);
+        });
+    }
+#endif
+}
+
+void GhosttyWidget::showEvent(QShowEvent *event)
+{
+    QWidget::showEvent(event);
+    scheduleSurfaceRepaint();
+}
+
 void GhosttyWidget::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
@@ -392,6 +432,10 @@ bool GhosttyWidget::event(QEvent *event)
             ghostty_surface_set_native_window(m_surface, hwnd);
             updateSurfaceSize();
         }
+        // The HWND may change again before the layout settles; the deferred
+        // repaint kicks (scheduleSurfaceRepaint) re-assert the final native
+        // window and force a redraw once the window is composited.
+        scheduleSurfaceRepaint();
     }
 #endif
     // Handle DPI changes
