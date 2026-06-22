@@ -77,9 +77,10 @@ void WorkspaceManager::selectPreviousWorkspace()
 }
 
 Workspace *WorkspaceManager::addWorkspace(const QString &title,
-                                           const QString &workingDirectory)
+                                           const QString &workingDirectory,
+                                           bool withInitialPanel)
 {
-    auto *ws = new Workspace(m_runtime, title, workingDirectory, this);
+    auto *ws = new Workspace(m_runtime, title, workingDirectory, this, withInitialPanel);
     int index = m_workspaces.size();
     m_workspaces.append(ws);
 

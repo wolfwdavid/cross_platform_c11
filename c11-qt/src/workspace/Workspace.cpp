@@ -5,15 +5,26 @@ namespace c11 {
 Workspace::Workspace(GhosttyRuntime &runtime,
                      const QString &title,
                      const QString &workingDirectory,
-                     QObject *parent)
+                     QObject *parent,
+                     bool withInitialPanel)
     : QObject(parent)
     , m_id(QUuid::createUuid())
     , m_title(title)
     , m_runtime(runtime)
 {
-    // Create initial terminal panel
-    auto *panel = createTerminalPanel(workingDirectory);
-    m_focusedPanelId = panel->id();
+    // Create initial terminal panel. Session restore passes withInitialPanel=false
+    // so it can populate the workspace from a snapshot without spawning (and then
+    // discarding) a throwaway default shell.
+    if (withInitialPanel) {
+        auto *panel = createTerminalPanel(workingDirectory);
+        m_focusedPanelId = panel->id();
+    }
+}
+
+void Workspace::setLayout(std::unique_ptr<PaneLayout> layout)
+{
+    m_layout = std::move(layout);
+    emit layoutChanged();
 }
 
 Workspace::~Workspace()

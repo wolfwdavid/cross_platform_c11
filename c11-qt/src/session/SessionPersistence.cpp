@@ -1,9 +1,13 @@
 #include "SessionPersistence.h"
 #include "platform/PlatformAbstraction.h"
+#include "workspace/Workspace.h"
+#include "panel/BrowserPanel.h"
+#include "panel/MarkdownPanel.h"
 
 #include <QDir>
 #include <QFile>
 #include <QJsonDocument>
+#include <QUrl>
 #include <QDebug>
 
 namespace c11 {
@@ -95,19 +99,13 @@ bool SessionPersistence::restoreFromSnapshot(const QJsonObject &snapshot)
     QJsonArray workspaces = snapshot.value("workspaces").toArray();
     if (workspaces.isEmpty()) return false;
 
-    // Remove existing workspaces (the initial one)
+    // Remove existing workspaces (the initial one).
     while (m_manager.count() > 0) {
         m_manager.removeWorkspace(0);
     }
 
     for (const auto &wsVal : workspaces) {
-        QJsonObject wsObj = wsVal.toObject();
-        QString title = wsObj.value("title").toString("Terminal");
-        auto *ws = m_manager.addWorkspace(title);
-        if (wsObj.contains("custom_title")) {
-            ws->setCustomTitle(wsObj.value("custom_title").toString());
-        }
-        ws->setPinned(wsObj.value("pinned").toBool());
+        restoreWorkspace(wsVal.toObject());
     }
 
     int selectedIdx = snapshot.value("selected_workspace_index").toInt(0);
@@ -115,6 +113,78 @@ bool SessionPersistence::restoreFromSnapshot(const QJsonObject &snapshot)
 
     emit restored();
     return true;
+}
+
+void SessionPersistence::restoreWorkspace(const QJsonObject &wsObj)
+{
+    const QString title = wsObj.value("title").toString("Terminal");
+
+    // Create the workspace empty so we can rebuild exactly the saved panels +
+    // layout without spawning a throwaway default terminal.
+    auto *ws = m_manager.addWorkspace(title, {}, /*withInitialPanel=*/false);
+    if (wsObj.contains("custom_title")) {
+        ws->setCustomTitle(wsObj.value("custom_title").toString());
+    }
+    ws->setPinned(wsObj.value("pinned").toBool());
+
+    // Recreate panels, recording snapshot-id -> new-id so the layout tree (which
+    // references the old ids) can be remapped.
+    QHash<QString, QUuid> idMap;
+    const QJsonArray panels = wsObj.value("panels").toArray();
+    for (const auto &pVal : panels) {
+        const QJsonObject p = pVal.toObject();
+        const QString oldId = p.value("id").toString();
+        const QString type = p.value("type").toString("terminal");
+        Panel *panel = nullptr;
+        if (type == "browser") {
+            panel = ws->createBrowserPanel(
+                QUrl(p.value("url").toString("about:blank")));
+        } else if (type == "markdown") {
+            panel = ws->createMarkdownPanel(p.value("file_path").toString());
+        } else {
+            panel = ws->createTerminalPanel();
+        }
+        if (panel && !oldId.isEmpty()) idMap.insert(oldId, panel->id());
+    }
+
+    // A workspace must always have at least one panel.
+    if (idMap.isEmpty()) {
+        ws->createTerminalPanel();
+        return;
+    }
+
+    // Rebuild the split tree from the snapshot; fall back to a single leaf on the
+    // first panel if the saved layout can't be resolved.
+    auto tree = layoutFromSnapshot(wsObj.value("layout").toObject(), idMap);
+    if (!tree) tree = PaneLayout::makeLeaf(*idMap.cbegin());
+    ws->setLayout(std::move(tree));
+
+    const QUuid focused = idMap.value(wsObj.value("focused_panel_id").toString());
+    if (!focused.isNull()) ws->setFocusedPanelId(focused);
+}
+
+std::unique_ptr<PaneLayout> SessionPersistence::layoutFromSnapshot(
+    const QJsonObject &node, const QHash<QString, QUuid> &idMap)
+{
+    const QString type = node.value("type").toString();
+    if (type == "leaf") {
+        const QUuid id = idMap.value(node.value("panel_id").toString());
+        if (id.isNull()) return nullptr; // panel was dropped (e.g. cap exceeded)
+        return PaneLayout::makeLeaf(id);
+    }
+    if (type == "split") {
+        auto first = layoutFromSnapshot(node.value("first").toObject(), idMap);
+        auto second = layoutFromSnapshot(node.value("second").toObject(), idMap);
+        // If a child is missing, collapse to the surviving side.
+        if (!first) return second;
+        if (!second) return first;
+        const auto dir = node.value("direction").toString() == "horizontal"
+                             ? PaneLayout::Direction::Horizontal
+                             : PaneLayout::Direction::Vertical;
+        return PaneLayout::makeSplit(dir, std::move(first), std::move(second),
+                                     node.value("ratio").toDouble(0.5));
+    }
+    return nullptr;
 }
 
 void SessionPersistence::onAutosave()
@@ -132,8 +202,10 @@ QJsonObject SessionPersistence::workspaceToSnapshot(const Workspace *ws) const
     }
     obj["pinned"] = ws->isPinned();
     obj["panel_count"] = ws->panelCount();
+    obj["focused_panel_id"] = ws->focusedPanelId().toString(QUuid::WithoutBraces);
 
-    // Panel types
+    // Panel types (plus the per-type state needed to recreate them: a browser's
+    // URL, a markdown panel's file path).
     QJsonArray panels;
     int count = 0;
     for (auto *panel : ws->allPanels()) {
@@ -142,9 +214,19 @@ QJsonObject SessionPersistence::workspaceToSnapshot(const Workspace *ws) const
         p["id"] = panel->id().toString(QUuid::WithoutBraces);
         p["title"] = panel->displayTitle();
         switch (panel->panelType()) {
-        case PanelType::Terminal: p["type"] = "terminal"; break;
-        case PanelType::Browser:  p["type"] = "browser"; break;
-        case PanelType::Markdown: p["type"] = "markdown"; break;
+        case PanelType::Terminal:
+            p["type"] = "terminal";
+            break;
+        case PanelType::Browser:
+            p["type"] = "browser";
+            if (auto *bp = qobject_cast<const BrowserPanel *>(panel))
+                p["url"] = bp->currentUrl().toString();
+            break;
+        case PanelType::Markdown:
+            p["type"] = "markdown";
+            if (auto *mp = qobject_cast<const MarkdownPanel *>(panel))
+                p["file_path"] = mp->filePath();
+            break;
         }
         panels.append(p);
         count++;
@@ -180,6 +262,11 @@ QJsonObject SessionPersistence::layoutToSnapshot(const PaneLayout *layout) const
 QString SessionPersistence::snapshotPath()
 {
     return platform::appDataDir() + "/session.json";
+}
+
+bool SessionPersistence::hasSnapshot()
+{
+    return QFile::exists(snapshotPath());
 }
 
 } // namespace c11

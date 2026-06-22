@@ -35,7 +35,8 @@ public:
 
     // Add / remove
     Workspace *addWorkspace(const QString &title = "Terminal",
-                            const QString &workingDirectory = {});
+                            const QString &workingDirectory = {},
+                            bool withInitialPanel = true);
     void removeWorkspace(const QUuid &id);
     void removeWorkspace(int index);
 
