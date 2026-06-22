@@ -95,8 +95,15 @@ launch, not a success.
 the editor) covers the c11 window you'll screenshot *that*. The script calls
 `SetForegroundWindow`, but Windows can refuse foreground changes from a background
 process — if your capture shows the wrong app, click the c11 window once and retry, or
-minimize the occluder. (`PrintWindow` is an alternative but tends to render Qt/OpenGL
-surfaces black.)
+minimize the occluder.
+
+**GL-capture caveat (important):** GDI `CopyFromScreen` does **not** reliably capture the
+**OpenGL**-rendered terminal surface (ghostty draws via WGL). A pane that is fully
+visible to the user can come back **blank/black** in the screenshot — the screenshot is
+lying, the pane isn't. **Do not conclude a rendering bug from a blank screenshot.** Trust
+`read-screen`: if it returns the pane's content, the terminal is rendering. Use the
+screenshot for chrome/layout (sidebar, splits, which workspace is selected), not as proof
+of terminal-content rendering. (`PrintWindow` has the same GL limitation.)
 
 ## Known issues seen during runs
 - **One-time unexpected exit:** the app has been observed to exit on its own shortly
@@ -104,14 +111,13 @@ surfaces black.)
   vanishes (`tasklist /FI "IMAGENAME eq c11.exe"` shows nothing), relaunch with logging:
   edit `launch.bat` to run the bin `c11.exe` in the foreground with `> log.txt 2>&1`
   (instead of `start`) to capture any crash output.
-- **Blank-on-relayout:** a ghostty pane can render blank (reparent/GL repaint) —
-  observed with maximize, and notably for **workspaces/panes created via the socket**: a
-  `new-workspace` + `new-pane` driven from the CLI shows a blank pane even though the PTY
-  is live (`read-screen` returns its content) and input doesn't force a repaint.
-  **Pre-existing/already-materialized workspaces render fine** — switching to one (e.g.
-  `select-workspace 1`) shows a normal terminal, so for a clean visual, drive a workspace
-  that already existed rather than one you just created over the socket. Separate from any
-  placement logic (the layout model is correct; this is the renderer).
+- **"Blank pane" in screenshots is usually a capture artifact, not a real bug.** Earlier
+  notes here claimed socket-created panes render blank; that was wrong — confirmed by the
+  operator that the terminal renders fine on screen. The blank came from GDI
+  `CopyFromScreen` not capturing the OpenGL surface (see the GL-capture caveat above).
+  Always cross-check a blank screenshot against `read-screen` before believing it.
+  (A genuine reparent/GL repaint glitch may still exist in some cases, but don't diagnose
+  it from screenshots alone.)
 
 ## Cleanup
 
