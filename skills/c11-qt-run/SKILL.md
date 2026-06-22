@@ -104,8 +104,14 @@ surfaces black.)
   vanishes (`tasklist /FI "IMAGENAME eq c11.exe"` shows nothing), relaunch with logging:
   edit `launch.bat` to run the bin `c11.exe` in the foreground with `> log.txt 2>&1`
   (instead of `start`) to capture any crash output.
-- **Blank-on-relayout:** maximizing or a socket-driven split can leave a ghostty pane
-  blank (reparent/GL repaint). Separate from any placement logic.
+- **Blank-on-relayout:** a ghostty pane can render blank (reparent/GL repaint) —
+  observed with maximize, and notably for **workspaces/panes created via the socket**: a
+  `new-workspace` + `new-pane` driven from the CLI shows a blank pane even though the PTY
+  is live (`read-screen` returns its content) and input doesn't force a repaint.
+  **Pre-existing/already-materialized workspaces render fine** — switching to one (e.g.
+  `select-workspace 1`) shows a normal terminal, so for a clean visual, drive a workspace
+  that already existed rather than one you just created over the socket. Separate from any
+  placement logic (the layout model is correct; this is the renderer).
 
 ## Cleanup
 
