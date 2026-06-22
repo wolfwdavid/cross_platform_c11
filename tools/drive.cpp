@@ -77,6 +77,23 @@ static void pressVk(WORD vk) {
     SendInput(2, in, sizeof(INPUT));
 }
 
+// Send a modifier chord, e.g. Ctrl+Shift+M. mods is a string of c/s/a (ctrl/
+// shift/alt); key is a single character. Holds modifiers, taps the key, releases.
+static void sendChord(const char* mods, char key) {
+    WORD mvk[3]; int n = 0;
+    for (const char* p = mods; *p; ++p) {
+        if (*p == 'c') mvk[n++] = VK_CONTROL;
+        else if (*p == 's') mvk[n++] = VK_SHIFT;
+        else if (*p == 'a') mvk[n++] = VK_MENU;
+    }
+    INPUT in = {}; in.type = INPUT_KEYBOARD;
+    for (int i = 0; i < n; ++i) { in.ki.wVk = mvk[i]; in.ki.dwFlags = 0; SendInput(1, &in, sizeof(INPUT)); }
+    WORD kvk = VkKeyScanA(key) & 0xFF;
+    in.ki.wVk = kvk; in.ki.dwFlags = 0; SendInput(1, &in, sizeof(INPUT));
+    in.ki.dwFlags = KEYEVENTF_KEYUP; SendInput(1, &in, sizeof(INPUT));
+    for (int i = n - 1; i >= 0; --i) { in.ki.wVk = mvk[i]; in.ki.dwFlags = KEYEVENTF_KEYUP; SendInput(1, &in, sizeof(INPUT)); }
+}
+
 int main(int argc, char** argv) {
     SetProcessDPIAware();
     if (argc < 2) { printf("usage: drive <type|enter|maximize|restore|resize> ...\n"); return 2; }
@@ -101,6 +118,13 @@ int main(int argc, char** argv) {
         SetWindowPos(hwnd, NULL, 0, 0, w, h, SWP_NOMOVE | SWP_NOZORDER);
     } else if (strcmp(cmd, "click") == 0 && argc >= 4) {
         clickClient(hwnd, atoi(argv[2]), atoi(argv[3]));
+    } else if (strcmp(cmd, "chord") == 0 && argc >= 4) {
+        forceForeground(hwnd);
+        sendChord(argv[2], argv[3][0]); // e.g. drive chord cs m  -> Ctrl+Shift+M
+    } else if (strcmp(cmd, "rawtype") == 0 && argc >= 3) {
+        typeUnicode(argv[2]); // type into whatever is focused (e.g. a dialog)
+    } else if (strcmp(cmd, "rawenter") == 0) {
+        pressVk(VK_RETURN);
     } else {
         printf("bad args\n"); return 2;
     }
