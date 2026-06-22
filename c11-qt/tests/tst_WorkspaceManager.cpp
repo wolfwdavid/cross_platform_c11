@@ -1,5 +1,6 @@
 #include <QTest>
 #include <QSignalSpy>
+#include <algorithm>
 #include "workspace/WorkspaceManager.h"
 #include "ghostty/GhosttyRuntime.h"
 
@@ -99,6 +100,31 @@ private slots:
         QCOMPARE(mgr.workspace(0), ws2);
         QCOMPARE(mgr.workspace(1), ws3);
         QCOMPARE(mgr.workspace(2), ws1);
+    }
+
+    // addPane must splice every new pane into the visible layout tree, not just
+    // create it. Regression for the new-pane orphan bug: createTerminalPanel
+    // alone leaves panes #2+ out of the tree (live shell, never rendered).
+    void testAddPanePlacesInLayout()
+    {
+        WorkspaceManager mgr(*m_runtime);
+        auto *ws = mgr.addWorkspace("WS");          // seeds one initial pane
+        const int before = ws->panelCount();
+        QCOMPARE(int(ws->orderedPanelIds().size()), before);
+
+        auto *p = ws->addPane();
+        QCOMPARE(ws->panelCount(), before + 1);
+        // The new pane is in the layout tree (orderedPanelIds reads the tree, so
+        // an orphaned pane would NOT appear) and is focused.
+        QCOMPARE(int(ws->orderedPanelIds().size()), before + 1);
+        QCOMPARE(ws->focusedPanelId(), p->id());
+        const auto ids = ws->orderedPanelIds();
+        QVERIFY(std::find(ids.begin(), ids.end(), p->id()) != ids.end());
+
+        // A third pane also lands in the tree.
+        auto *p3 = ws->addPane();
+        QCOMPARE(int(ws->orderedPanelIds().size()), before + 2);
+        QCOMPARE(ws->focusedPanelId(), p3->id());
     }
 
     void testIndexOf()

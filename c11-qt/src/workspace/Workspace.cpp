@@ -144,6 +144,33 @@ void Workspace::removePanel(const QUuid &panelId)
     delete panel;
 }
 
+TerminalPanel *Workspace::addPane(const QString &workingDirectory)
+{
+    auto *panel = createTerminalPanel(workingDirectory);
+
+    // createTerminalPanel seeds the layout for the first pane only. For later
+    // panes we must splice the new leaf into the tree beside an existing one, or
+    // it has a live shell but no slot and never renders. Prefer the focused pane;
+    // fall back to any existing leaf if focus is unset (e.g. the ctor's initial
+    // pane). The new pane itself isn't in the tree yet, so it's never the target.
+    if (m_layout) {
+        QUuid target = m_focusedPanelId;
+        if (target.isNull() || !m_layout->findLeaf(target)) {
+            for (const QUuid &id : m_layout->allPanelIds()) {
+                if (id != panel->id()) { target = id; break; }
+            }
+        }
+        if (!target.isNull() && target != panel->id() && m_layout->findLeaf(target)) {
+            m_layout->splitLeaf(target, panel->id(),
+                                PaneLayout::Direction::Horizontal);
+        }
+    }
+
+    setFocusedPanelId(panel->id());
+    emit layoutChanged();
+    return panel;
+}
+
 void Workspace::splitPanel(const QUuid &existingPanelId,
                             PaneLayout::Direction direction,
                             const QString &workingDirectory,

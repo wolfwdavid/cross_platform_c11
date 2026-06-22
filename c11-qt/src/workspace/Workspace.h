@@ -61,6 +61,11 @@ public:
                     const QString &workingDirectory = {},
                     bool insertAfter = true);
 
+    // Add a terminal pane to the workspace and make it visible+focused: seeds the
+    // layout for the first pane, otherwise splices the new leaf beside the focused
+    // pane. Use this (not bare createTerminalPanel) when a pane must actually show.
+    TerminalPanel *addPane(const QString &workingDirectory = {});
+
     // Focus
     QUuid focusedPanelId() const { return m_focusedPanelId; }
     void setFocusedPanelId(const QUuid &id);
