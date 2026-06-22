@@ -35,9 +35,14 @@ public:
 
     void setFocused(bool focused);
     void sendText(const QString &text);
-    // Submit the current line: synthesizes an Enter key press/release. Unlike
-    // sendText (which goes through ghostty's paste path and does NOT execute a
-    // trailing newline), this drives the key encoder so the shell runs the line.
+    // Synthesize a key press+release. `keycode` is the platform-native scancode
+    // ghostty matches to recover the logical key; this drives ghostty's key
+    // encoder (the right path for Enter, Ctrl-C, arrows, and other escape
+    // sequences — unlike sendText, which is a paste).
+    void sendKey(uint32_t keycode, ghostty_input_mods_e mods,
+                 uint32_t unshiftedCodepoint = 0);
+    // Submit the current line (Enter). Convenience over sendKey; sendText's paste
+    // path does NOT execute a trailing newline, so use this to run a command.
     void sendEnter();
 
     // Surface info

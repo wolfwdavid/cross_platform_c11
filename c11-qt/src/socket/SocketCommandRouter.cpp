@@ -53,6 +53,7 @@ void SocketCommandRouter::registerCommands()
     m_v2Methods["surface.split"]       = [this](auto &p) { return v2SurfaceSplit(p); };
     m_v2Methods["surface.close"]       = [this](auto &p) { return v2SurfaceClose(p); };
     m_v2Methods["surface.send"]        = [this](auto &p) { return v2SurfaceSend(p); };
+    m_v2Methods["surface.send_key"]    = [this](auto &p) { return v2SurfaceSendKey(p); };
     m_v2Methods["pane.list"]           = [this](auto &p) { return v2PaneList(p); };
     m_v2Methods["browser.open_split"]  = [this](auto &p) { return v2BrowserOpen(p); };
     m_v2Methods["theme.list"]              = [this](auto &p) { return v2ThemeList(p); };
@@ -463,6 +464,46 @@ QJsonValue SocketCommandRouter::v2SurfaceSend(const QJsonObject &params)
                        {"surface", panel->id().toString(QUuid::WithoutBraces)},
                        {"sent", text.size()},
                        {"submitted", submit}};
+}
+
+QJsonValue SocketCommandRouter::v2SurfaceSendKey(const QJsonObject &params)
+{
+    const QString chord = params.value("key").toString();
+    if (chord.isEmpty()) {
+        return QJsonObject{{"error", "missing_key"},
+                           {"message", "send-key requires a 'key' chord"}};
+    }
+
+    GhosttyKeyMapper::Chord parsed;
+    if (!GhosttyKeyMapper::parseChord(chord, parsed)) {
+        return QJsonObject{{"error", "bad_key"},
+                           {"message", "Unrecognized key chord: " + chord}};
+    }
+
+    QString idStr = params.value("id").toString();
+    if (idStr.isEmpty()) idStr = params.value("surface").toString();
+
+    auto *panel = resolvePanel(idStr);
+    if (!panel) {
+        return QJsonObject{{"error", "not_found"},
+                           {"message", "No surface matches the given ref"}};
+    }
+    auto *term = dynamic_cast<TerminalPanel *>(panel);
+    if (!term) {
+        return QJsonObject{{"error", "not_a_terminal"},
+                           {"message", "Target surface is not a terminal"}};
+    }
+    auto *widget = term->ghosttyWidget();
+    if (!widget) {
+        return QJsonObject{{"error", "no_surface"},
+                           {"message", "Terminal has no live surface"}};
+    }
+
+    widget->sendKey(parsed.keycode, parsed.mods, parsed.unshifted_codepoint);
+
+    return QJsonObject{{"ok", true},
+                       {"surface", panel->id().toString(QUuid::WithoutBraces)},
+                       {"key", chord}};
 }
 
 QJsonValue SocketCommandRouter::v2PaneList(const QJsonObject &)

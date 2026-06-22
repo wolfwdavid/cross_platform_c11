@@ -180,33 +180,41 @@ void GhosttyWidget::sendText(const QString &text)
 #endif
 }
 
-void GhosttyWidget::sendEnter()
+void GhosttyWidget::sendKey(uint32_t keycode, ghostty_input_mods_e mods,
+                            uint32_t unshiftedCodepoint)
 {
 #ifndef C11_GHOSTTY_STUB
     if (!m_surface) return;
 
     // ghostty resolves the logical key by matching `keycode` against its native
-    // scancode table (input/keycodes.zig). Enter's native code is platform
-    // specific: 0x1C on Windows, 0x24 (xkb/mac) elsewhere. With the right
-    // keycode ghostty encodes the proper Return sequence for the active mode.
-#if defined(Q_OS_WIN)
-    constexpr uint32_t kEnterKeycode = 0x1C;
-#else
-    constexpr uint32_t kEnterKeycode = 0x24;
-#endif
-
+    // scancode table (input/keycodes.zig), then encodes the proper sequence for
+    // the active terminal mode (including modifiers like Ctrl).
     ghostty_input_key_s key{};
-    key.mods = GHOSTTY_MODS_NONE;
+    key.mods = mods;
     key.consumed_mods = GHOSTTY_MODS_NONE;
-    key.keycode = kEnterKeycode;
+    key.keycode = keycode;
     key.text = nullptr;
-    key.unshifted_codepoint = 0;
+    key.unshifted_codepoint = unshiftedCodepoint;
     key.composing = false;
 
     key.action = GHOSTTY_ACTION_PRESS;
     ghostty_surface_key(m_surface, key);
     key.action = GHOSTTY_ACTION_RELEASE;
     ghostty_surface_key(m_surface, key);
+#else
+    Q_UNUSED(keycode);
+    Q_UNUSED(mods);
+    Q_UNUSED(unshiftedCodepoint);
+#endif
+}
+
+void GhosttyWidget::sendEnter()
+{
+    // Enter's native scancode: 0x1C on Windows, 0x24 (xkb/mac) elsewhere.
+#if defined(Q_OS_WIN)
+    sendKey(0x1C, GHOSTTY_MODS_NONE);
+#else
+    sendKey(0x24, GHOSTTY_MODS_NONE);
 #endif
 }
 

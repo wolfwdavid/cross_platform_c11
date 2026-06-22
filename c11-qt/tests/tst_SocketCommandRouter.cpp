@@ -123,6 +123,69 @@ private slots:
 
         QCOMPARE(result.value("error").toString(), QString("missing_text"));
     }
+
+    // --- surface.send_key ---
+
+    static QString sendKeyLine(const QString &id, const QString &key)
+    {
+        QJsonObject params;
+        if (!id.isEmpty()) params["id"] = id;
+        params["key"] = key;
+        QJsonObject req;
+        req["id"] = 1;
+        req["method"] = "surface.send_key";
+        req["params"] = params;
+        return QString::fromUtf8(QJsonDocument(req).toJson(QJsonDocument::Compact));
+    }
+
+    void sendKeyToTerminal()
+    {
+        WorkspaceManager mgr(*m_runtime);
+        auto *ws = mgr.addWorkspace("WS");
+        auto *panel = ws->createTerminalPanel();
+        const QString pid = panel->id().toString(QUuid::WithoutBraces);
+
+        SocketCommandRouter router(mgr);
+        auto result = resultOf(router.processLine(sendKeyLine(pid, "ctrl+c")));
+
+        QVERIFY(result.value("ok").toBool());
+        QCOMPARE(result.value("surface").toString(), pid);
+        QCOMPARE(result.value("key").toString(), QString("ctrl+c"));
+    }
+
+    void sendKeyWithoutKeyErrors()
+    {
+        WorkspaceManager mgr(*m_runtime);
+        auto *ws = mgr.addWorkspace("WS");
+        ws->createTerminalPanel();
+
+        SocketCommandRouter router(mgr);
+        auto result = resultOf(router.processLine(sendKeyLine(QString(), "")));
+        QCOMPARE(result.value("error").toString(), QString("missing_key"));
+    }
+
+    void sendKeyRejectsBadChord()
+    {
+        WorkspaceManager mgr(*m_runtime);
+        auto *ws = mgr.addWorkspace("WS");
+        auto *panel = ws->createTerminalPanel();
+
+        SocketCommandRouter router(mgr);
+        auto result = resultOf(router.processLine(
+            sendKeyLine(panel->id().toString(QUuid::WithoutBraces), "notakey")));
+        QCOMPARE(result.value("error").toString(), QString("bad_key"));
+    }
+
+    void sendKeyToMissingSurfaceErrors()
+    {
+        WorkspaceManager mgr(*m_runtime);
+        mgr.addWorkspace("WS");
+
+        SocketCommandRouter router(mgr);
+        auto result = resultOf(router.processLine(
+            sendKeyLine(QUuid::createUuid().toString(QUuid::WithoutBraces), "enter")));
+        QCOMPARE(result.value("error").toString(), QString("not_found"));
+    }
 };
 
 QTEST_MAIN(TestSocketCommandRouter)
