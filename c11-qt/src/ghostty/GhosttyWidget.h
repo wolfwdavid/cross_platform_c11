@@ -49,6 +49,11 @@ public:
     ghostty_surface_size_s surfaceSize() const;
     bool processExited() const;
 
+    // Read the surface's rendered text. Default: the visible viewport; with
+    // scrollback=true, the full screen buffer including history. Returns "" if
+    // there is no surface or the read fails.
+    QString readScreen(bool scrollback = false) const;
+
 signals:
     void surfaceCreated();
     void surfaceDestroyed();

@@ -101,6 +101,7 @@ int main(int argc, char *argv[])
                 << "  close-surface        Close surface/panel\n"
                 << "  send                 Send text to a surface (--surface ID, --no-submit)\n"
                 << "  send-key             Send a key chord, e.g. ctrl+c, enter (--surface ID)\n"
+                << "  read-screen          Read a surface's text (--surface ID, --lines N, --scrollback)\n"
                 << "  open-browser         Open browser panel\n"
                 << "  capabilities         Show capabilities (V2)\n"
                 << "\nOptions:\n"
@@ -217,6 +218,46 @@ int main(int argc, char *argv[])
         QJsonDocument doc = QJsonDocument::fromJson(response.toUtf8());
         if (!doc.isNull()) {
             out << doc.toJson(QJsonDocument::Indented);
+        } else {
+            out << response << "\n";
+        }
+        return 0;
+    }
+
+    // `read-screen` prints the surface's rendered text directly (not the JSON
+    // envelope) so it's readable; --lines N keeps the last N lines, --scrollback
+    // includes history.
+    if (command == "read-screen") {
+        QString surfaceId;
+        int lines = 0;
+        bool scrollback = false;
+
+        for (int i = 0; i < remaining.size(); ++i) {
+            const QString &a = remaining[i];
+            if (a == "--surface" && i + 1 < remaining.size()) surfaceId = remaining[++i];
+            else if (a.startsWith("--surface=")) surfaceId = a.mid(10);
+            else if (a == "--lines" && i + 1 < remaining.size()) lines = remaining[++i].toInt();
+            else if (a.startsWith("--lines=")) lines = a.mid(8).toInt();
+            else if (a == "--scrollback") scrollback = true;
+            else if (a == "--workspace" && i + 1 < remaining.size()) ++i; // skill-compat
+            else if (a.startsWith("--workspace=")) { /* ignored */ }
+        }
+
+        QJsonObject params;
+        if (!surfaceId.isEmpty()) params["id"] = surfaceId;
+        if (lines > 0) params["lines"] = lines;
+        if (scrollback) params["scrollback"] = true;
+
+        QString request = buildV2Request("surface.read_screen", params);
+        QString response = sendCommand(socketPath, request);
+        QJsonDocument doc = QJsonDocument::fromJson(response.toUtf8());
+        if (!doc.isNull()) {
+            QJsonObject result = doc.object().value("result").toObject();
+            if (result.contains("text")) {
+                out << result.value("text").toString() << "\n";
+            } else {
+                out << doc.toJson(QJsonDocument::Indented); // error envelope
+            }
         } else {
             out << response << "\n";
         }

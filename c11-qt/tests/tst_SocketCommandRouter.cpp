@@ -186,6 +186,46 @@ private slots:
             sendKeyLine(QUuid::createUuid().toString(QUuid::WithoutBraces), "enter")));
         QCOMPARE(result.value("error").toString(), QString("not_found"));
     }
+
+    // --- surface.read_screen ---
+
+    static QString readScreenLine(const QString &id)
+    {
+        QJsonObject params;
+        if (!id.isEmpty()) params["id"] = id;
+        QJsonObject req;
+        req["id"] = 1;
+        req["method"] = "surface.read_screen";
+        req["params"] = params;
+        return QString::fromUtf8(QJsonDocument(req).toJson(QJsonDocument::Compact));
+    }
+
+    void readScreenReturnsTextField()
+    {
+        WorkspaceManager mgr(*m_runtime);
+        auto *ws = mgr.addWorkspace("WS");
+        auto *panel = ws->createTerminalPanel();
+        const QString pid = panel->id().toString(QUuid::WithoutBraces);
+
+        SocketCommandRouter router(mgr);
+        auto result = resultOf(router.processLine(readScreenLine(pid)));
+
+        QVERIFY(result.value("ok").toBool());
+        QCOMPARE(result.value("surface").toString(), pid);
+        // Stub build: no live surface text, but the field is always present.
+        QVERIFY(result.contains("text"));
+    }
+
+    void readScreenMissingSurfaceErrors()
+    {
+        WorkspaceManager mgr(*m_runtime);
+        mgr.addWorkspace("WS");
+
+        SocketCommandRouter router(mgr);
+        auto result = resultOf(router.processLine(
+            readScreenLine(QUuid::createUuid().toString(QUuid::WithoutBraces))));
+        QCOMPARE(result.value("error").toString(), QString("not_found"));
+    }
 };
 
 QTEST_MAIN(TestSocketCommandRouter)

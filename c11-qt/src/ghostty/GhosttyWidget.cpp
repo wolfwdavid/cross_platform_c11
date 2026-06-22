@@ -218,6 +218,39 @@ void GhosttyWidget::sendEnter()
 #endif
 }
 
+QString GhosttyWidget::readScreen(bool scrollback) const
+{
+#ifndef C11_GHOSTTY_STUB
+    if (!m_surface) return QString();
+
+    // Select the whole region: TOP_LEFT→BOTTOM_RIGHT pseudo-coords span the full
+    // extent of the tag (visible viewport, or the entire screen incl. scrollback)
+    // without needing exact dimensions.
+    const ghostty_point_tag_e tag =
+        scrollback ? GHOSTTY_POINT_SCREEN : GHOSTTY_POINT_VIEWPORT;
+
+    ghostty_selection_s sel{};
+    sel.top_left.tag = tag;
+    sel.top_left.coord = GHOSTTY_POINT_COORD_TOP_LEFT;
+    sel.bottom_right.tag = tag;
+    sel.bottom_right.coord = GHOSTTY_POINT_COORD_BOTTOM_RIGHT;
+    sel.rectangle = false;
+
+    ghostty_text_s text{};
+    if (!ghostty_surface_read_text(m_surface, sel, &text)) return QString();
+
+    QString result;
+    if (text.text && text.text_len > 0) {
+        result = QString::fromUtf8(text.text, static_cast<int>(text.text_len));
+    }
+    ghostty_surface_free_text(m_surface, &text);
+    return result;
+#else
+    Q_UNUSED(scrollback);
+    return QString();
+#endif
+}
+
 ghostty_surface_size_s GhosttyWidget::surfaceSize() const
 {
 #ifndef C11_GHOSTTY_STUB

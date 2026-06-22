@@ -54,6 +54,7 @@ void SocketCommandRouter::registerCommands()
     m_v2Methods["surface.close"]       = [this](auto &p) { return v2SurfaceClose(p); };
     m_v2Methods["surface.send"]        = [this](auto &p) { return v2SurfaceSend(p); };
     m_v2Methods["surface.send_key"]    = [this](auto &p) { return v2SurfaceSendKey(p); };
+    m_v2Methods["surface.read_screen"] = [this](auto &p) { return v2SurfaceReadScreen(p); };
     m_v2Methods["pane.list"]           = [this](auto &p) { return v2PaneList(p); };
     m_v2Methods["browser.open_split"]  = [this](auto &p) { return v2BrowserOpen(p); };
     m_v2Methods["theme.list"]              = [this](auto &p) { return v2ThemeList(p); };
@@ -504,6 +505,42 @@ QJsonValue SocketCommandRouter::v2SurfaceSendKey(const QJsonObject &params)
     return QJsonObject{{"ok", true},
                        {"surface", panel->id().toString(QUuid::WithoutBraces)},
                        {"key", chord}};
+}
+
+QJsonValue SocketCommandRouter::v2SurfaceReadScreen(const QJsonObject &params)
+{
+    QString idStr = params.value("id").toString();
+    if (idStr.isEmpty()) idStr = params.value("surface").toString();
+
+    auto *panel = resolvePanel(idStr);
+    if (!panel) {
+        return QJsonObject{{"error", "not_found"},
+                           {"message", "No surface matches the given ref"}};
+    }
+    auto *term = dynamic_cast<TerminalPanel *>(panel);
+    if (!term) {
+        return QJsonObject{{"error", "not_a_terminal"},
+                           {"message", "Target surface is not a terminal"}};
+    }
+    auto *widget = term->ghosttyWidget();
+    if (!widget) {
+        return QJsonObject{{"error", "no_surface"},
+                           {"message", "Terminal has no live surface"}};
+    }
+
+    QString text = widget->readScreen(params.value("scrollback").toBool(false));
+
+    // Optional: keep only the last N lines.
+    const int lines = params.value("lines").toInt(0);
+    if (lines > 0) {
+        QStringList parts = text.split('\n');
+        if (parts.size() > lines) parts = parts.mid(parts.size() - lines);
+        text = parts.join('\n');
+    }
+
+    return QJsonObject{{"ok", true},
+                       {"surface", panel->id().toString(QUuid::WithoutBraces)},
+                       {"text", text}};
 }
 
 QJsonValue SocketCommandRouter::v2PaneList(const QJsonObject &)

@@ -65,6 +65,7 @@ private:
     QJsonValue v2SurfaceClose(const QJsonObject &params);
     QJsonValue v2SurfaceSend(const QJsonObject &params);
     QJsonValue v2SurfaceSendKey(const QJsonObject &params);
+    QJsonValue v2SurfaceReadScreen(const QJsonObject &params);
     QJsonValue v2PaneList(const QJsonObject &params);
     QJsonValue v2BrowserOpen(const QJsonObject &params);
 
