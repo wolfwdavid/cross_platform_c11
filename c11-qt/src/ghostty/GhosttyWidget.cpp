@@ -180,6 +180,36 @@ void GhosttyWidget::sendText(const QString &text)
 #endif
 }
 
+void GhosttyWidget::sendEnter()
+{
+#ifndef C11_GHOSTTY_STUB
+    if (!m_surface) return;
+
+    // ghostty resolves the logical key by matching `keycode` against its native
+    // scancode table (input/keycodes.zig). Enter's native code is platform
+    // specific: 0x1C on Windows, 0x24 (xkb/mac) elsewhere. With the right
+    // keycode ghostty encodes the proper Return sequence for the active mode.
+#if defined(Q_OS_WIN)
+    constexpr uint32_t kEnterKeycode = 0x1C;
+#else
+    constexpr uint32_t kEnterKeycode = 0x24;
+#endif
+
+    ghostty_input_key_s key{};
+    key.mods = GHOSTTY_MODS_NONE;
+    key.consumed_mods = GHOSTTY_MODS_NONE;
+    key.keycode = kEnterKeycode;
+    key.text = nullptr;
+    key.unshifted_codepoint = 0;
+    key.composing = false;
+
+    key.action = GHOSTTY_ACTION_PRESS;
+    ghostty_surface_key(m_surface, key);
+    key.action = GHOSTTY_ACTION_RELEASE;
+    ghostty_surface_key(m_surface, key);
+#endif
+}
+
 ghostty_surface_size_s GhosttyWidget::surfaceSize() const
 {
 #ifndef C11_GHOSTTY_STUB

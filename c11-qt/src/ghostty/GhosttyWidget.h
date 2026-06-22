@@ -35,6 +35,10 @@ public:
 
     void setFocused(bool focused);
     void sendText(const QString &text);
+    // Submit the current line: synthesizes an Enter key press/release. Unlike
+    // sendText (which goes through ghostty's paste path and does NOT execute a
+    // trailing newline), this drives the key encoder so the shell runs the line.
+    void sendEnter();
 
     // Surface info
     ghostty_surface_size_s surfaceSize() const;

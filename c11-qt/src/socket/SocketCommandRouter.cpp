@@ -457,7 +457,7 @@ QJsonValue SocketCommandRouter::v2SurfaceSend(const QJsonObject &params)
     }
 
     widget->sendText(text);
-    if (submit) widget->sendText(QStringLiteral("\r"));
+    if (submit) widget->sendEnter();
 
     return QJsonObject{{"ok", true},
                        {"surface", panel->id().toString(QUuid::WithoutBraces)},
