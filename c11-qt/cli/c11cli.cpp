@@ -163,10 +163,52 @@ int main(int argc, char *argv[])
         QString method = v2Methods.value(command, command);
         QJsonObject params;
 
+        // Store a value under the right JSON type. The router reads most params
+        // as strings, but `index` as an int and `select` as a bool, so a bare
+        // string would be silently coerced to 0 / the default.
+        auto setParam = [&](const QString &key, const QString &value) {
+            if (key == "index") {
+                params[key] = value.toInt();
+            } else if (key == "select") {
+                params[key] = (value == "true" || value == "1");
+            } else {
+                params[key] = value;
+            }
+        };
+
+        QStringList positionals;
         for (const auto &arg : remaining) {
-            if (arg.contains('=')) {
-                int eq = arg.indexOf('=');
-                params[arg.left(eq).remove(0, arg.startsWith("--") ? 2 : 0)] = arg.mid(eq + 1);
+            int eq = arg.indexOf('=');
+            if (eq > 0) { // key=value or --key=value
+                QString key = arg.left(eq);
+                if (key.startsWith("--")) key = key.mid(2);
+                setParam(key, arg.mid(eq + 1));
+            } else if (!arg.startsWith("-")) {
+                positionals << arg; // bare value, mapped per-command below
+            }
+        }
+
+        // Map leading positional args to the param each command expects, so the
+        // natural CLI form works (e.g. `open-browser <url>`, `select-workspace 2`)
+        // and not only the explicit `key=value` form.
+        if (!positionals.isEmpty()) {
+            const QString &first = positionals.first();
+            if (command == "select-workspace") {
+                // A number is a 0-based index; anything else is a workspace id.
+                bool isInt = false;
+                first.toInt(&isInt);
+                setParam(isInt ? "index" : "id", first);
+            } else {
+                static const QMap<QString, QString> firstPositional = {
+                    {"open-browser",    "url"},
+                    {"new-split",       "direction"},
+                    {"new-workspace",   "title"},
+                    {"new-pane",        "cwd"},
+                    {"close-workspace", "id"},
+                    {"close-surface",   "id"},
+                };
+                const QString key = firstPositional.value(command);
+                if (!key.isEmpty() && !params.contains(key)) setParam(key, first);
             }
         }
 
