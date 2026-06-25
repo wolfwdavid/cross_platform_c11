@@ -45,6 +45,23 @@ QString socketPath()
 #endif
 }
 
+QString defaultShellCommand()
+{
+#ifdef Q_OS_WIN
+    // ghostty defaults to cmd.exe on Windows, where `ls` is unknown and the
+    // environment is bare. Prefer PowerShell — the modern cross-platform pwsh
+    // first, then the always-present Windows PowerShell — so a fresh pane behaves
+    // like the macOS login shell the operator expects.
+    if (!QStandardPaths::findExecutable("pwsh").isEmpty()) {
+        return QStringLiteral("pwsh.exe");
+    }
+    return QStringLiteral("powershell.exe");
+#else
+    // macOS/Linux: empty string → ghostty spawns the user's login shell / $SHELL.
+    return {};
+#endif
+}
+
 QString appDataDir()
 {
 #ifdef Q_OS_MACOS

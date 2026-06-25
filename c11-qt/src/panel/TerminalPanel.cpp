@@ -20,7 +20,13 @@ TerminalPanel::TerminalPanel(GhosttyRuntime &runtime,
         {"C11_SHELL_INTEGRATION", "1"},
         {"C11_SOCKET", platform::socketPath()},
     };
-    m_widget->createSurface(workingDirectory, command, envVars);
+    // No explicit command → use the platform's default shell. On Windows this is
+    // PowerShell rather than ghostty's bare cmd.exe, so `ls` and PATH-installed
+    // tools (claude, etc.) work out of the box.
+    const QString resolvedCommand =
+        command.isEmpty() ? platform::defaultShellCommand() : command;
+
+    m_widget->createSurface(workingDirectory, resolvedCommand, envVars);
 }
 
 TerminalPanel::~TerminalPanel()

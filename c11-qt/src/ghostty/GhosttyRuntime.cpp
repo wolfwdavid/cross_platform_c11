@@ -62,9 +62,18 @@ bool GhosttyRuntime::initialize(const GhosttyConfig &config)
         return false;
     }
 
-    // Tick timer for Ghostty event processing (16ms ~ 60fps)
-    m_tickTimer.setTimerType(Qt::PreciseTimer);
-    m_tickTimer.start(16);
+    // Ghostty's event loop is driven by its wakeup callback (onWakeup ->
+    // wakeupRequested -> tick): libghostty calls it whenever it has work pending
+    // (PTY output, cursor blink, its own libxev timers). That is the correct,
+    // event-driven path — the rendering happens on ghostty's own render thread.
+    //
+    // We keep only a slow, coarse heartbeat as a safety net in case a wakeup is
+    // ever missed during a reparent/resize. A free-running 16ms PreciseTimer was
+    // wrong here: it ticked 60x/sec doing nothing most frames, and PreciseTimer
+    // forces the global Windows timer resolution to 1ms (timeBeginPeriod), which
+    // raises power draw and adds scheduling jitter felt as lag.
+    m_tickTimer.setTimerType(Qt::CoarseTimer);
+    m_tickTimer.start(100);
 
     qDebug() << "GhosttyRuntime initialized";
     return true;

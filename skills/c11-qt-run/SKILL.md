@@ -29,12 +29,21 @@ Launch with `scripts/launch.bat` (sets PATH, cd's to `build/bin`, `start`s the a
 ```
 
 **Critical:** launch with a real *Windows* PATH (`C:\Windows\System32;…;<Qt>\bin`).
-The app's terminal panes spawn `cmd.exe`, which **inherits the launcher's environment**.
-If you launch from Git Bash with its Unix-style `$PATH` (`/c/Windows/System32`), every
-pane's shell breaks with `'cmd.exe' is not recognized as an internal or external
-command` — the app looks fine, but nothing runs in any terminal. `launch.bat` sets the
-correct PATH so spawned shells work. (The app binary itself launches fine from anywhere;
-it's the *child shells* that need the Windows PATH.)
+The app's terminal panes spawn the default shell — **PowerShell** on Windows
+(`pwsh.exe` if present, else `powershell.exe`; via `platform::defaultShellCommand()`),
+not the bare `cmd.exe` ghostty would otherwise use — and that shell **inherits the
+launcher's environment**. If you launch from Git Bash with its Unix-style `$PATH`
+(`/c/Windows/System32`), the pane shell can't be resolved/started — the app looks fine,
+but nothing runs in any terminal. `launch.bat` sets the correct PATH so spawned shells
+work. (The app binary itself launches fine from anywhere; it's the *child shells* that
+need the Windows PATH.)
+
+**PATH gotcha for `claude` (and other PATH-installed tools):** `launch.bat` sets a
+*minimal* PATH that intentionally omits the user's PATH, so npm-global tools like
+`claude` (`%APPDATA%\npm`) won't resolve in panes launched via the harness. To exercise
+those tools, launch normally so panes inherit the full user PATH:
+`( cd c11-qt/build/bin && /c/Windows/System32/cmd.exe //c start "" c11.exe )` with the
+Qt bin dir prepended to `$PATH` first. `ls` works regardless (it's a PowerShell alias).
 
 The PowerShell **tool** has been observed broken in some sessions (every call returns
 exit 1, no output). Workarounds used throughout this recipe: drive `.bat` via
