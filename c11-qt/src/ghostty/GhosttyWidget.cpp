@@ -185,6 +185,16 @@ void GhosttyWidget::setFocused(bool focused)
     m_focused = focused;
 #ifndef C11_GHOSTTY_STUB
     if (m_surface) {
+        // ghostty_surface_set_focus() is synchronous: it blocks on the surface's
+        // worker thread (SRW condition variable) until the focus change is acked.
+        // If that worker is gone — the shell/PTY exited, or the IO thread failed
+        // to start — nothing ever signals it and this call deadlocks. Because it
+        // runs on the Qt GUI thread (via focusInEvent), that freezes the whole
+        // window and the socket listener. Skip it for a dead surface; focus state
+        // is meaningless there anyway. (See c11-windows-focus-deadlock.)
+        if (ghostty_surface_process_exited(m_surface)) {
+            return;
+        }
         ghostty_surface_set_focus(m_surface, focused);
     }
 #endif
@@ -376,15 +386,21 @@ void GhosttyWidget::keyPressEvent(QKeyEvent *event)
     if (!m_surface) return;
 
     ghostty_input_key_s key = m_keyMapper.mapKeyEvent(event, GHOSTTY_ACTION_PRESS);
-    ghostty_surface_key(m_surface, key);
 
-    // Also send text for printable characters
-    QString text = event->text();
+    // Attach the layout-resolved text (composed char, AltGr, dead keys) directly
+    // to the key event and let ghostty_surface_key emit it ONCE. This mirrors the
+    // canonical apprt pattern (keyEvent.text = ptr; ghostty_surface_key). The old
+    // code passed text=nullptr and then ALSO called ghostty_surface_text — but
+    // ghostty_surface_key already emits the character, so every printable key was
+    // typed twice. The QByteArray must outlive the ghostty_surface_key call.
+    QByteArray utf8;
+    const QString text = event->text();
     if (!text.isEmpty() && !event->modifiers().testFlag(Qt::ControlModifier)
         && !event->modifiers().testFlag(Qt::AltModifier)) {
-        QByteArray utf8 = text.toUtf8();
-        ghostty_surface_text(m_surface, utf8.constData(), utf8.size());
+        utf8 = text.toUtf8();
+        key.text = utf8.constData();
     }
+    ghostty_surface_key(m_surface, key);
 #else
     Q_UNUSED(event);
 #endif

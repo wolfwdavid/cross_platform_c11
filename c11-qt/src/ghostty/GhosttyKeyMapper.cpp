@@ -94,9 +94,9 @@ ghostty_input_key_s GhosttyKeyMapper::mapKeyEvent(const QKeyEvent *event,
         key.unshifted_codepoint = text.at(0).unicode();
     }
 
-    // text pointer - Ghostty copies this, so stack-local is fine within
-    // the scope of the caller. We pass nullptr; the caller sends text
-    // separately via ghostty_surface_text.
+    // Leave text null here; the caller (keyPressEvent) attaches the UTF-8 text to
+    // the key event before calling ghostty_surface_key, which emits it once.
+    // (Do NOT also call ghostty_surface_text for the same key — that double-types.)
     key.text = nullptr;
 
     return key;

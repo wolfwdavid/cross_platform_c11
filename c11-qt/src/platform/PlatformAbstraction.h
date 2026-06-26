@@ -8,6 +8,13 @@ namespace c11::platform {
 // Returns the OS-appropriate socket path for the c11 daemon.
 QString socketPath();
 
+// Returns the command a new terminal pane should spawn when the caller gives no
+// explicit command. On Windows this prefers PowerShell (pwsh.exe, else
+// powershell.exe) over ghostty's bare cmd.exe default so `ls` and PATH-installed
+// tools behave like the macOS login shell. On macOS/Linux it returns an empty
+// string, letting ghostty pick the user's login shell / $SHELL.
+QString defaultShellCommand();
+
 // Returns the application data directory.
 QString appDataDir();
 
