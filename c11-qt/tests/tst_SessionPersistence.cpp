@@ -4,6 +4,9 @@
 #include <QTemporaryDir>
 #include "session/SessionPersistence.h"
 #include "workspace/WorkspaceManager.h"
+#include "workspace/Workspace.h"
+#include "workspace/PaneLayout.h"
+#include "panel/MarkdownPanel.h"
 #include "ghostty/GhosttyRuntime.h"
 
 using namespace c11;
@@ -99,6 +102,56 @@ private slots:
                                 .toObject()["panels"].toArray();
         QCOMPARE(panels.size(), 1);
         QCOMPARE(panels[0].toObject()["type"].toString(), "terminal");
+    }
+
+    // A split layout (multiple panes) must survive a save -> restore round trip,
+    // with the panels recreated and the tree (direction + leaves) rebuilt. This
+    // is the core of the session-restore fix: restoreFromSnapshot used to recreate
+    // only workspace titles, dropping all panes.
+    void testRoundTripSplitLayout()
+    {
+        WorkspaceManager mgr(*m_runtime);
+        auto *ws = mgr.addWorkspace("Split");
+        ws->splitPanel(ws->focusedPanelId(), PaneLayout::Direction::Horizontal);
+        QCOMPARE(ws->panelCount(), 2);
+        QVERIFY(ws->layout()->isSplit());
+
+        SessionPersistence sp(mgr);
+        const QJsonObject snap = sp.createSnapshot();
+        QVERIFY(sp.restoreFromSnapshot(snap));
+
+        QCOMPARE(mgr.count(), 1);
+        auto *r = mgr.workspace(0);
+        QCOMPARE(r->panelCount(), 2);
+        QVERIFY(r->layout()->isSplit());
+        QCOMPARE(r->layout()->split().direction, PaneLayout::Direction::Horizontal);
+        // Both leaves must resolve to panels that actually exist in the workspace.
+        const auto ids = r->layout()->allPanelIds();
+        QCOMPARE(ids.size(), size_t(2));
+        for (const auto &id : ids) QVERIFY(r->panel(id) != nullptr);
+    }
+
+    // A markdown panel's file path is part of its state and must round-trip so the
+    // restored panel reopens the same document.
+    void testRoundTripMarkdownPath()
+    {
+        WorkspaceManager mgr(*m_runtime);
+        auto *ws = mgr.addWorkspace("Docs");
+        auto *md = ws->createMarkdownPanel("C:/notes/readme.md");
+        ws->layout()->splitLeaf(ws->focusedPanelId(), md->id(),
+                                PaneLayout::Direction::Horizontal);
+
+        SessionPersistence sp(mgr);
+        const QJsonObject snap = sp.createSnapshot();
+        QVERIFY(sp.restoreFromSnapshot(snap));
+
+        auto *r = mgr.workspace(0);
+        MarkdownPanel *restored = nullptr;
+        for (auto *p : r->allPanels()) {
+            if (auto *m = qobject_cast<MarkdownPanel *>(p)) { restored = m; break; }
+        }
+        QVERIFY(restored != nullptr);
+        QCOMPARE(restored->filePath(), QString("C:/notes/readme.md"));
     }
 };
 

@@ -1,13 +1,35 @@
-# Ghostty build integration via prebuilt GhosttyKit or ExternalProject
+# Ghostty build integration.
 #
-# Phase 0: Link against the prebuilt GhosttyKit.xcframework from the parent project.
-# Future: ExternalProject_Add for Zig build from source.
+# Three paths, in priority order:
+#   1. macOS: link the prebuilt GhosttyKit.xcframework (libghostty.a / framework).
+#   2. Non-Apple, C11_BUILD_GHOSTTY=ON: build libghostty from the ghostty/ submodule
+#      via `zig build` (ExternalProject) and link it. Requires a zig toolchain AND a
+#      ghostty checkout that exposes a GHOSTTY_PLATFORM_QT renderer backend.
+#   3. Otherwise: stub mode (C11_GHOSTTY_STUB) — the app compiles and runs with no
+#      live terminal. This is the default off-Apple so the build stays green until
+#      the GHOSTTY_PLATFORM_QT-capable libghostty is available.
+
+option(C11_BUILD_GHOSTTY
+    "Build libghostty from the ghostty/ submodule via zig (needs zig + GHOSTTY_PLATFORM_QT)"
+    OFF)
+
+# Link a prebuilt libghostty instead of building it. On Windows, libghostty must
+# be cross-compiled from a POSIX host (its build tooling is POSIX-only), so we
+# consume the resulting DLL + MSVC import lib here. The directory must contain
+# lib/ghostty.lib (import lib) + lib/ghostty.dll (copied next to the exe at run
+# time). Implies C11_BUILD_GHOSTTY behaviour (no stub).
+set(C11_GHOSTTY_PREBUILT_DIR "" CACHE PATH
+    "Directory with a prebuilt libghostty (lib/ghostty.lib + lib/ghostty.dll)")
 
 set(GHOSTTYKIT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../GhosttyKit.xcframework" CACHE PATH
     "Path to prebuilt GhosttyKit.xcframework")
 
 set(GHOSTTY_SLICE "macos-arm64_x86_64")
 set(GHOSTTY_SLICE_DIR "${GHOSTTYKIT_PATH}/${GHOSTTY_SLICE}")
+
+# Repo root holds the embedding header (ghostty.h) and the ghostty/ submodule.
+set(GHOSTTY_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/..")
+set(GHOSTTY_SUBMODULE "${GHOSTTY_REPO_ROOT}/ghostty")
 
 if(APPLE AND EXISTS "${GHOSTTY_SLICE_DIR}/libghostty.a")
     # Prebuilt static library from xcframework
@@ -21,10 +43,69 @@ elseif(APPLE AND EXISTS "${GHOSTTY_SLICE_DIR}/GhosttyKit.framework")
     target_include_directories(ghostty INTERFACE "${GHOSTTY_SLICE_DIR}/GhosttyKit.framework/Headers")
     target_link_libraries(ghostty INTERFACE "${GHOSTTY_SLICE_DIR}/GhosttyKit.framework/GhosttyKit")
     message(STATUS "GhosttyKit framework found: ${GHOSTTY_SLICE_DIR}/GhosttyKit.framework")
-else()
-    # Stub mode: compile without Ghostty linking (for CI/testing)
-    message(STATUS "GhosttyKit not found at ${GHOSTTYKIT_PATH}, building in stub mode")
+elseif(C11_GHOSTTY_PREBUILT_DIR AND NOT APPLE)
+    # Link a prebuilt libghostty (e.g. cross-compiled for Windows from WSL).
+    set(_ghostty_implib "${C11_GHOSTTY_PREBUILT_DIR}/lib/ghostty.lib")
+    set(_ghostty_dll "${C11_GHOSTTY_PREBUILT_DIR}/lib/ghostty.dll")
+    if(NOT EXISTS "${_ghostty_implib}")
+        message(FATAL_ERROR
+            "C11_GHOSTTY_PREBUILT_DIR set but import lib not found: ${_ghostty_implib}")
+    endif()
     add_library(ghostty INTERFACE)
-    target_include_directories(ghostty INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/../")
+    # Use the repo-root embedding header (kept in sync with the Zig ABI).
+    target_include_directories(ghostty INTERFACE "${GHOSTTY_REPO_ROOT}")
+    target_link_libraries(ghostty INTERFACE "${_ghostty_implib}")
+    # Expose the DLL path so the app target can stage it next to the exe.
+    set(C11_GHOSTTY_RUNTIME_DLL "${_ghostty_dll}" CACHE FILEPATH "" FORCE)
+    message(STATUS "Ghostty: linking prebuilt ${_ghostty_implib}")
+elseif(C11_BUILD_GHOSTTY AND NOT APPLE)
+    # Build libghostty from source via zig.
+    find_program(ZIG_EXECUTABLE zig)
+    if(NOT ZIG_EXECUTABLE)
+        message(FATAL_ERROR
+            "C11_BUILD_GHOSTTY=ON but 'zig' was not found on PATH. Install zig, or "
+            "leave C11_BUILD_GHOSTTY=OFF to build in stub mode.")
+    endif()
+    if(NOT EXISTS "${GHOSTTY_SUBMODULE}/build.zig")
+        message(FATAL_ERROR
+            "ghostty/ submodule not checked out at ${GHOSTTY_SUBMODULE} "
+            "(run: git submodule update --init ghostty).")
+    endif()
+
+    if(WIN32)
+        set(_ghostty_zig_target "x86_64-windows")
+        set(_ghostty_libname "ghostty.lib")
+    else()
+        set(_ghostty_zig_target "x86_64-linux-gnu")
+        set(_ghostty_libname "libghostty.a")
+    endif()
+
+    include(ExternalProject)
+    set(_ghostty_prefix "${CMAKE_CURRENT_BINARY_DIR}/ghostty-zig")
+    ExternalProject_Add(ghostty_zig
+        SOURCE_DIR        "${GHOSTTY_SUBMODULE}"
+        CONFIGURE_COMMAND ""
+        BUILD_IN_SOURCE   1
+        BUILD_COMMAND     "${ZIG_EXECUTABLE}" build
+                          -Dtarget=${_ghostty_zig_target}
+                          -Dapp-runtime=none
+                          -Doptimize=ReleaseFast
+        INSTALL_COMMAND   ""
+        BUILD_ALWAYS      0
+        BUILD_BYPRODUCTS  "${GHOSTTY_SUBMODULE}/zig-out/lib/${_ghostty_libname}")
+
+    add_library(ghostty INTERFACE)
+    add_dependencies(ghostty ghostty_zig)
+    # Embedding header lives at the repo root (kept in sync with the Zig ABI).
+    target_include_directories(ghostty INTERFACE "${GHOSTTY_REPO_ROOT}")
+    target_link_libraries(ghostty INTERFACE
+        "${GHOSTTY_SUBMODULE}/zig-out/lib/${_ghostty_libname}")
+    message(STATUS "Ghostty: building libghostty from source (target ${_ghostty_zig_target})")
+else()
+    # Stub mode: compile without Ghostty linking (default off-Apple / CI / testing).
+    message(STATUS "Ghostty: stub mode (no live terminal). "
+        "Set -DC11_BUILD_GHOSTTY=ON to build libghostty from source.")
+    add_library(ghostty INTERFACE)
+    target_include_directories(ghostty INTERFACE "${GHOSTTY_REPO_ROOT}")
     target_compile_definitions(ghostty INTERFACE C11_GHOSTTY_STUB)
 endif()

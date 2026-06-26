@@ -62,6 +62,59 @@ private slots:
         QVERIFY(mapper.mapModifiers(Qt::ShiftModifier) & GHOSTTY_MODS_SHIFT);
         QVERIFY(mapper.mapModifiers(Qt::AltModifier) & GHOSTTY_MODS_ALT);
     }
+
+    // --- parseChord (powers `c11 send-key`) ---
+
+    void testParseNamedKey()
+    {
+        GhosttyKeyMapper::Chord c;
+        QVERIFY(GhosttyKeyMapper::parseChord("enter", c));
+        QCOMPARE(c.mods, static_cast<ghostty_input_mods_e>(GHOSTTY_MODS_NONE));
+        QCOMPARE(c.unshifted_codepoint, 0u);   // named key carries no codepoint
+#if defined(Q_OS_WIN)
+        QCOMPARE(c.keycode, 0x1Cu);            // Enter's Windows native scancode
+#else
+        QVERIFY(c.keycode != 0u);
+#endif
+    }
+
+    void testParseCtrlLetter()
+    {
+        GhosttyKeyMapper::Chord c;
+        QVERIFY(GhosttyKeyMapper::parseChord("ctrl+c", c));
+        QVERIFY(c.mods & GHOSTTY_MODS_CTRL);
+        QVERIFY(!(c.mods & GHOSTTY_MODS_SHIFT));
+        QCOMPARE(c.unshifted_codepoint, static_cast<uint32_t>('c'));
+#if defined(Q_OS_WIN)
+        QCOMPARE(c.keycode, 0x2Eu);            // 'c' Windows scancode
+#endif
+    }
+
+    void testParseCaseInsensitiveAndMultiMod()
+    {
+        GhosttyKeyMapper::Chord c;
+        QVERIFY(GhosttyKeyMapper::parseChord("Ctrl+Shift+K", c));
+        QVERIFY(c.mods & GHOSTTY_MODS_CTRL);
+        QVERIFY(c.mods & GHOSTTY_MODS_SHIFT);
+        QCOMPARE(c.unshifted_codepoint, static_cast<uint32_t>('k'));
+    }
+
+    void testParseShiftTab()
+    {
+        GhosttyKeyMapper::Chord c;
+        QVERIFY(GhosttyKeyMapper::parseChord("shift+tab", c));
+        QVERIFY(c.mods & GHOSTTY_MODS_SHIFT);
+        QCOMPARE(c.unshifted_codepoint, 0u);
+    }
+
+    void testParseRejectsGarbage()
+    {
+        GhosttyKeyMapper::Chord c;
+        QVERIFY(!GhosttyKeyMapper::parseChord("", c));
+        QVERIFY(!GhosttyKeyMapper::parseChord("notakey", c));
+        QVERIFY(!GhosttyKeyMapper::parseChord("ctrl+", c));      // empty key token
+        QVERIFY(!GhosttyKeyMapper::parseChord("hyper+c", c));    // unknown modifier
+    }
 };
 
 QTEST_GUILESS_MAIN(TestGhosttyKeyMapper)

@@ -28,7 +28,9 @@ void PaneLayoutWidget::setLayout(const PaneLayout &layout)
 void PaneLayoutWidget::clear()
 {
     if (m_rootWidget) {
-        // Detach all panel widgets so they aren't deleted with the splitter
+        // Detach all panel content widgets (leaves) so they aren't deleted with
+        // the splitter scaffolding. Panel widgets are owned by their Panels and
+        // must survive a layout rebuild (e.g. a split reuses the existing pane).
         auto detachAll = [](QWidget *w, auto &self) -> void {
             if (auto *splitter = qobject_cast<QSplitter *>(w)) {
                 for (int i = splitter->count() - 1; i >= 0; --i) {
@@ -40,7 +42,13 @@ void PaneLayoutWidget::clear()
         };
         detachAll(m_rootWidget, detachAll);
 
-        delete m_rootWidget;
+        // Only delete the splitter tree. When the root is a single pane,
+        // m_rootWidget IS a panel's content widget — deleting it here would
+        // destroy the live pane (and its terminal surface) out from under its
+        // owning Panel. detachAll already reparented leaves out of the tree.
+        if (qobject_cast<QSplitter *>(m_rootWidget)) {
+            delete m_rootWidget;
+        }
         m_rootWidget = nullptr;
     }
 }

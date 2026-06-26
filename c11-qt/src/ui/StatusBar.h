@@ -20,6 +20,10 @@ private slots:
     void onSelectionChanged(const QUuid &id);
 
 private:
+    // (Re)subscribe to the currently selected workspace's panel/title signals so
+    // the counter tracks splits/closes. Safe to call repeatedly.
+    void connectToSelectedWorkspace();
+
     WorkspaceManager &m_manager;
     QLabel *m_workspaceLabel;
     QLabel *m_paneLabel;

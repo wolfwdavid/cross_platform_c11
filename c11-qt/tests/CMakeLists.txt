@@ -42,6 +42,7 @@ add_test(NAME GhosttyKeyMapperTest COMMAND test_key_mapper)
 add_executable(test_platform
     tst_Platform.cpp
     ../src/platform/PlatformAbstraction.cpp
+    $<$<PLATFORM_ID:Windows>:../src/platform/platform_windows.cpp>
 )
 
 target_include_directories(test_platform PRIVATE
@@ -87,6 +88,9 @@ add_executable(test_workspace_manager
     ../src/ghostty/GhosttyKeyMapper.cpp
     ../src/ghostty/GhosttyRuntime.cpp
     ../src/ghostty/GhosttyConfig.cpp
+    $<$<NOT:$<PLATFORM_ID:Darwin>>:../src/ghostty/GhosttyGlContext.cpp>
+    ../src/platform/PlatformAbstraction.cpp
+    $<$<PLATFORM_ID:Windows>:../src/platform/platform_windows.cpp>
 )
 
 target_include_directories(test_workspace_manager PRIVATE
@@ -102,9 +106,54 @@ target_link_libraries(test_workspace_manager PRIVATE
     Qt6::Widgets
     Qt6::WebEngineWidgets
     Qt6::Test
+    # GhosttyGlContext.cpp uses raw WGL on Windows.
+    $<$<PLATFORM_ID:Windows>:opengl32>
+    $<$<PLATFORM_ID:Windows>:gdi32>
 )
 
 add_test(NAME WorkspaceManagerTest COMMAND test_workspace_manager)
+
+# StatusBar unit tests (stub mode). Verifies the pane counter tracks panel
+# add/remove on the selected workspace, including the one selected at the time
+# the bar is constructed (regression for the stale-counter bug).
+add_executable(test_status_bar
+    tst_StatusBar.cpp
+    ../src/ui/StatusBar.cpp
+    ../src/workspace/WorkspaceManager.cpp
+    ../src/workspace/Workspace.cpp
+    ../src/workspace/PaneLayout.cpp
+    ../src/panel/Panel.cpp
+    ../src/panel/TerminalPanel.cpp
+    ../src/panel/BrowserPanel.cpp
+    ../src/panel/MarkdownPanel.cpp
+    ../src/ghostty/GhosttyWidget.cpp
+    ../src/ghostty/GhosttyKeyMapper.cpp
+    ../src/ghostty/GhosttyRuntime.cpp
+    ../src/ghostty/GhosttyConfig.cpp
+    $<$<NOT:$<PLATFORM_ID:Darwin>>:../src/ghostty/GhosttyGlContext.cpp>
+    ../src/platform/PlatformAbstraction.cpp
+    $<$<PLATFORM_ID:Windows>:../src/platform/platform_windows.cpp>
+)
+
+target_include_directories(test_status_bar PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../
+)
+
+target_compile_definitions(test_status_bar PRIVATE C11_GHOSTTY_STUB)
+
+target_link_libraries(test_status_bar PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::WebEngineWidgets
+    Qt6::Test
+    # GhosttyGlContext.cpp uses raw WGL on Windows.
+    $<$<PLATFORM_ID:Windows>:opengl32>
+    $<$<PLATFORM_ID:Windows>:gdi32>
+)
+
+add_test(NAME StatusBarTest COMMAND test_status_bar)
 
 # SocketProtocol unit tests
 add_executable(test_socket_protocol
@@ -155,7 +204,9 @@ add_executable(test_session_persistence
     ../src/ghostty/GhosttyKeyMapper.cpp
     ../src/ghostty/GhosttyRuntime.cpp
     ../src/ghostty/GhosttyConfig.cpp
+    $<$<NOT:$<PLATFORM_ID:Darwin>>:../src/ghostty/GhosttyGlContext.cpp>
     ../src/platform/PlatformAbstraction.cpp
+    $<$<PLATFORM_ID:Windows>:../src/platform/platform_windows.cpp>
 )
 
 target_include_directories(test_session_persistence PRIVATE
@@ -171,6 +222,9 @@ target_link_libraries(test_session_persistence PRIVATE
     Qt6::Widgets
     Qt6::WebEngineWidgets
     Qt6::Test
+    # GhosttyGlContext.cpp uses raw WGL on Windows.
+    $<$<PLATFORM_ID:Windows>:opengl32>
+    $<$<PLATFORM_ID:Windows>:gdi32>
 )
 
 add_test(NAME SessionPersistenceTest COMMAND test_session_persistence)
@@ -191,3 +245,94 @@ target_link_libraries(test_mailbox_envelope PRIVATE
 )
 
 add_test(NAME MailboxEnvelopeTest COMMAND test_mailbox_envelope)
+
+# SocketCommandRouter unit tests — surface.send routing + targeting seam.
+add_executable(test_socket_router
+    tst_SocketCommandRouter.cpp
+    ../src/socket/SocketCommandRouter.cpp
+    ../src/socket/SocketProtocol.cpp
+    ../src/metadata/SurfaceMetadataStore.cpp
+    ../src/theme/ThemeManager.cpp
+    ../src/workspace/WorkspaceManager.cpp
+    ../src/workspace/Workspace.cpp
+    ../src/workspace/PaneLayout.cpp
+    ../src/panel/Panel.cpp
+    ../src/panel/TerminalPanel.cpp
+    ../src/panel/BrowserPanel.cpp
+    ../src/panel/MarkdownPanel.cpp
+    ../src/ghostty/GhosttyWidget.cpp
+    ../src/ghostty/GhosttyKeyMapper.cpp
+    ../src/ghostty/GhosttyRuntime.cpp
+    ../src/ghostty/GhosttyConfig.cpp
+    $<$<NOT:$<PLATFORM_ID:Darwin>>:../src/ghostty/GhosttyGlContext.cpp>
+    ../src/platform/PlatformAbstraction.cpp
+    $<$<PLATFORM_ID:Windows>:../src/platform/platform_windows.cpp>
+)
+
+target_include_directories(test_socket_router PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../
+)
+
+target_compile_definitions(test_socket_router PRIVATE
+    C11_GHOSTTY_STUB
+    C11_VERSION="${PROJECT_VERSION}" # SocketCommandRouter reports it in capabilities
+)
+
+target_link_libraries(test_socket_router PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::WebEngineWidgets
+    Qt6::Test
+    # GhosttyGlContext.cpp uses raw WGL on Windows.
+    $<$<PLATFORM_ID:Windows>:opengl32>
+    $<$<PLATFORM_ID:Windows>:gdi32>
+)
+
+add_test(NAME SocketCommandRouterTest COMMAND test_socket_router)
+
+# GhosttyGlContext / Qt-platform seam tests (non-Apple only).
+# Exercises desktop-GL context creation and ghostty_platform_qt_s marshalling.
+if(NOT APPLE)
+    add_executable(test_gl_context
+        tst_GhosttyGlContext.cpp
+        ../src/ghostty/GhosttyGlContext.cpp
+    )
+    target_include_directories(test_gl_context PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../
+    )
+    target_link_libraries(test_gl_context PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Widgets
+        Qt6::Test
+        # GhosttyGlContext.cpp uses raw WGL on Windows.
+        $<$<PLATFORM_ID:Windows>:opengl32>
+        $<$<PLATFORM_ID:Windows>:gdi32>
+    )
+    add_test(NAME GlContextTest COMMAND test_gl_context)
+endif()
+
+# libghostty init smoke test. Walks the embedded C API startup sequence
+# (ghostty_init -> config_new -> finalize -> app_new) against a real linked
+# libghostty, catching ABI/runtime regressions in the embedding seam on this
+# platform. Only meaningful when a real libghostty is linked (the `ghostty`
+# target resolves real symbols), so it's gated on the prebuilt / build-from-source
+# paths; in stub mode those symbols don't exist and this would fail to link.
+if(NOT APPLE AND (C11_GHOSTTY_PREBUILT_DIR OR C11_BUILD_GHOSTTY))
+    add_executable(test_ghostty_init ghostty_probe.c)
+    target_include_directories(test_ghostty_init PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../  # for ghostty.h
+    )
+    target_link_libraries(test_ghostty_init PRIVATE ghostty)
+    # The DLL (Windows) must sit next to the test exe at run time.
+    if(C11_GHOSTTY_RUNTIME_DLL AND EXISTS "${C11_GHOSTTY_RUNTIME_DLL}")
+        add_custom_command(TARGET test_ghostty_init POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${C11_GHOSTTY_RUNTIME_DLL}" "$<TARGET_FILE_DIR:test_ghostty_init>"
+            COMMENT "Staging libghostty DLL next to test_ghostty_init")
+    endif()
+    add_test(NAME GhosttyInitSmokeTest COMMAND test_ghostty_init)
+endif()

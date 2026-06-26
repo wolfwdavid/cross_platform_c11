@@ -52,6 +52,7 @@ private:
     QJsonValue v2SystemPing(const QJsonObject &params);
     QJsonValue v2SystemTree(const QJsonObject &params);
     QJsonValue v2SystemCapabilities(const QJsonObject &params);
+    QJsonValue v2SystemIdentify(const QJsonObject &params);
     QJsonValue v2WorkspaceList(const QJsonObject &params);
     QJsonValue v2WorkspaceCurrent(const QJsonObject &params);
     QJsonValue v2WorkspaceCreate(const QJsonObject &params);
@@ -63,6 +64,9 @@ private:
     QJsonValue v2SurfaceCreate(const QJsonObject &params);
     QJsonValue v2SurfaceSplit(const QJsonObject &params);
     QJsonValue v2SurfaceClose(const QJsonObject &params);
+    QJsonValue v2SurfaceSend(const QJsonObject &params);
+    QJsonValue v2SurfaceSendKey(const QJsonObject &params);
+    QJsonValue v2SurfaceReadScreen(const QJsonObject &params);
     QJsonValue v2PaneList(const QJsonObject &params);
     QJsonValue v2BrowserOpen(const QJsonObject &params);
 
@@ -79,6 +83,11 @@ private:
     // Helpers
     QJsonObject workspaceToJson(const Workspace *ws) const;
     QJsonObject panelToJson(const Panel *panel) const;
+
+    // Resolve a surface/panel ref to a live Panel. Empty ref → the focused panel
+    // of the selected workspace; a UUID → the matching panel in any workspace;
+    // otherwise nullptr. Shared targeting seam for send / send-key / read-screen.
+    Panel *resolvePanel(const QString &idStr) const;
 
     WorkspaceManager &m_manager;
     QMap<QString, V1Handler> m_v1Commands;

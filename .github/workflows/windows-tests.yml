@@ -1,0 +1,68 @@
+name: Windows Tests
+
+# Builds the c11-qt Qt/MSVC project on Windows in stub mode (no libghostty) and
+# runs the unit suite via ctest. Stub mode is the intended CI path
+# (GhosttyIntegration.cmake): it needs only Qt + MSVC, no zig cross-compile, and
+# exercises the model, parser, persistence, widget, and GL-context-seam tests.
+# The libghostty ABI smoke test (GhosttyInitSmokeTest) is gated on a real linked
+# libghostty and is intentionally not part of this job.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'c11-qt/**'
+      - '.github/workflows/windows-tests.yml'
+  pull_request:
+    paths:
+      - 'c11-qt/**'
+      - '.github/workflows/windows-tests.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  windows-unit:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          submodules: false # stub mode uses the repo-root ghostty.h
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          # Newest version available on the aqt mirror (the dev machine uses
+          # 6.11.x from a non-aqt source; the code builds fine against 6.9.x).
+          version: '6.9.3'
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          modules: qtwebengine qtwebchannel qtpositioning
+          cache: true
+
+      - name: Set up MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Configure
+        working-directory: c11-qt
+        shell: pwsh
+        run: >
+          cmake -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          "-DCMAKE_PREFIX_PATH=$env:QT_ROOT_DIR"
+          "-DCMAKE_MAP_IMPORTED_CONFIG_RELEASE=RelWithDebInfo;Release"
+
+      - name: Build
+        working-directory: c11-qt
+        run: cmake --build build
+
+      - name: Test
+        working-directory: c11-qt/build
+        run: ctest --output-on-failure --no-tests=error

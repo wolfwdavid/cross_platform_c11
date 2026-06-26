@@ -1,0 +1,5 @@
+# Build artifacts and capture output from the Windows validation helpers.
+*.exe
+*.obj
+*.out
+*.png

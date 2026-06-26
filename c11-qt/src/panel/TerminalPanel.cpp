@@ -1,4 +1,5 @@
 #include "TerminalPanel.h"
+#include "platform/PlatformAbstraction.h"
 
 namespace c11 {
 
@@ -11,7 +12,15 @@ TerminalPanel::TerminalPanel(GhosttyRuntime &runtime,
     , m_widget(new GhosttyWidget(runtime))
     , m_workspaceId(workspaceId)
 {
-    m_widget->createSurface(workingDirectory, command);
+    // Inject c11's shell-integration env so an agent (or the CLI) running inside
+    // this pane can self-locate and reach the socket without the operator.
+    const QList<QPair<QString, QString>> envVars = {
+        {"C11_SURFACE_ID", id().toString(QUuid::WithoutBraces)},
+        {"C11_WORKSPACE_ID", m_workspaceId.toString(QUuid::WithoutBraces)},
+        {"C11_SHELL_INTEGRATION", "1"},
+        {"C11_SOCKET", platform::socketPath()},
+    };
+    m_widget->createSurface(workingDirectory, command, envVars);
 }
 
 TerminalPanel::~TerminalPanel()

@@ -23,7 +23,8 @@ public:
     explicit Workspace(GhosttyRuntime &runtime,
                        const QString &title = "Terminal",
                        const QString &workingDirectory = {},
-                       QObject *parent = nullptr);
+                       QObject *parent = nullptr,
+                       bool withInitialPanel = true);
     ~Workspace() override;
 
     QUuid id() const { return m_id; }
@@ -50,10 +51,20 @@ public:
     // Layout
     PaneLayout *layout() const { return m_layout.get(); }
 
+    // Replace the layout tree wholesale (used by session restore, which rebuilds
+    // the tree from a snapshot after recreating the panels). The panel ids in
+    // `layout` must reference panels already added to this workspace.
+    void setLayout(std::unique_ptr<PaneLayout> layout);
+
     void splitPanel(const QUuid &existingPanelId,
                     PaneLayout::Direction direction,
                     const QString &workingDirectory = {},
                     bool insertAfter = true);
+
+    // Add a terminal pane to the workspace and make it visible+focused: seeds the
+    // layout for the first pane, otherwise splices the new leaf beside the focused
+    // pane. Use this (not bare createTerminalPanel) when a pane must actually show.
+    TerminalPanel *addPane(const QString &workingDirectory = {});
 
     // Focus
     QUuid focusedPanelId() const { return m_focusedPanelId; }

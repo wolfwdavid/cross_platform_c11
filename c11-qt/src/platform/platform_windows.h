@@ -3,6 +3,12 @@
 // Windows-specific platform utilities.
 // Only compiled on Windows (guarded by Q_OS_WIN).
 
+// Pull in Qt's platform detection so Q_OS_WIN is defined before the guard
+// below. Without this, including this header before any other Qt header
+// (as platform_windows.cpp does) would evaluate the guard as false and emit
+// no declarations/definitions, causing unresolved-symbol link errors.
+#include <QtGlobal>
+
 #ifdef Q_OS_WIN
 
 #include <QString>

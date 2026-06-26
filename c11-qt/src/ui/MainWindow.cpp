@@ -6,6 +6,7 @@
 #include <QApplication>
 #include <QCloseEvent>
 #include <QClipboard>
+#include <QTimer>
 #include <QFileDialog>
 #include <QHBoxLayout>
 #include <QInputDialog>
@@ -30,9 +31,15 @@ MainWindow::MainWindow(C11Application &app, QWidget *parent)
     applyConfig();
     setupMenuBar();
 
-    // Create workspace manager with initial workspace
+    // Create workspace manager. If a previous session was saved, restore it after
+    // the window is shown (deferred below) — QWebEngineView panels misrender if
+    // built before the event loop is running. Otherwise seed one fresh terminal.
     m_workspaceManager = new WorkspaceManager(app.ghosttyRuntime(), this);
-    m_workspaceManager->addWorkspace("Terminal", app.ghosttyConfig().workingDirectory);
+    m_sessionPersistence = new SessionPersistence(*m_workspaceManager, this);
+    const bool willRestore = SessionPersistence::hasSnapshot();
+    if (!willRestore) {
+        m_workspaceManager->addWorkspace("Terminal", app.ghosttyConfig().workingDirectory);
+    }
 
     // Build sidebar + workspace stack layout
     auto *centralWidget = new QWidget(this);
@@ -112,9 +119,17 @@ MainWindow::MainWindow(C11Application &app, QWidget *parent)
         }
     });
 
-    // Session persistence
-    m_sessionPersistence = new SessionPersistence(*m_workspaceManager, this);
+    // Session persistence: begin autosaving, and run the deferred restore once
+    // the event loop is live (so QWebEngineView panels build correctly). If the
+    // snapshot turns out to be unusable, fall back to a single terminal.
     m_sessionPersistence->startAutosave();
+    if (willRestore) {
+        QTimer::singleShot(0, this, [this, wd = app.ghosttyConfig().workingDirectory]() {
+            if (!m_sessionPersistence->restore() && m_workspaceManager->count() == 0) {
+                m_workspaceManager->addWorkspace("Terminal", wd);
+            }
+        });
+    }
 
     // Theme manager
     ThemeManager::instance().loadThemes();

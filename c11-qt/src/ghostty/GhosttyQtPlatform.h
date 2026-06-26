@@ -1,20 +1,31 @@
 #pragma once
 
+// GhosttyQtPlatform: configures a Ghostty surface for GHOSTTY_PLATFORM_QT.
+//
+// On Linux/Windows, Ghostty cannot use GHOSTTY_PLATFORM_MACOS (NSView/Metal).
+// Instead it uses GHOSTTY_PLATFORM_QT with the OpenGL renderer, fed a native
+// window handle + a host-created GL context. The context is owned by a
+// GhosttyGlContext (see GhosttyGlContext.h); this header just marshals its
+// native handles into the ghostty_surface_config_s.
+//
+// NOTE: this is the host (Qt) side of the contract. It is fully implemented and
+// compiles today, but a working terminal additionally requires a libghostty
+// built with a GHOSTTY_PLATFORM_QT renderer backend (tracked on the Ghostty
+// fork). Until that exists, GhosttyIntegration.cmake keeps the app in stub mode.
+
 #include "ghostty.h"
-#include <QWidget>
-#include <QGuiApplication>
+#include <QtGlobal>
 
 #if defined(Q_OS_LINUX) || defined(Q_OS_WIN)
-#include <QOpenGLContext>
-#include <QOpenGLWidget>
+#include "GhosttyGlContext.h"
+#include <QGuiApplication>
+#include <cstdint>
 #endif
 
 namespace c11 {
 
-// Configures a Ghostty surface for the Qt platform (Linux/Windows).
-// Uses GHOSTTY_PLATFORM_QT with the OpenGL renderer.
-// On Windows, ANGLE (bundled with Qt WebEngine) provides OpenGL->DirectX.
 struct GhosttyQtPlatform {
+    // True on platforms that use GHOSTTY_PLATFORM_QT (Linux/Windows).
     static bool isSupported()
     {
 #if defined(Q_OS_LINUX) || defined(Q_OS_WIN)
@@ -24,44 +35,33 @@ struct GhosttyQtPlatform {
 #endif
     }
 
-    // Configure a surface config for the Qt platform.
-    static bool configureSurface(ghostty_surface_config_s &config,
-                                  void *nativeWindowHandle,
-                                  double scaleFactor)
-    {
 #if defined(Q_OS_LINUX) || defined(Q_OS_WIN)
+    // Fill `config` for the Qt platform from a live GL context + native window.
+    // `nativeWindow` is the HWND (Windows) or X11 Window / wl_surface* (Linux),
+    // typically reinterpret_cast from QWidget::winId().
+    static bool configureSurface(ghostty_surface_config_s &config,
+                                 GhosttyGlContext &glContext,
+                                 void *nativeWindow,
+                                 uint32_t width,
+                                 uint32_t height,
+                                 double scaleFactor)
+    {
+        if (!glContext.isValid()) return false;
+
         config.platform_tag = GHOSTTY_PLATFORM_QT;
-        config.platform.qt.native_window = nativeWindowHandle;
+        config.platform.qt.native_window = nativeWindow;
+        config.platform.qt.gl_context = glContext.nativeContext();
+        config.platform.qt.gl_display = glContext.nativeDisplay();
+        config.platform.qt.width = width;
+        config.platform.qt.height = height;
         config.platform.qt.scale_factor = scaleFactor;
-        config.platform.qt.is_wayland = false;
-        config.platform.qt.width = 0;
-        config.platform.qt.height = 0;
-        config.platform.qt.gl_context = nullptr;
-        config.platform.qt.gl_display = nullptr;
+        config.platform.qt.is_wayland =
+            (QGuiApplication::platformName() == QLatin1String("wayland"));
 
-#ifdef Q_OS_LINUX
-        // Detect Wayland
-        QString platform = QGuiApplication::platformName();
-        config.platform.qt.is_wayland = (platform == "wayland");
-#endif
-
-        // Get the OpenGL context from Qt
-        QOpenGLContext *ctx = QOpenGLContext::currentContext();
-        if (ctx) {
-            config.platform.qt.gl_context = ctx->nativeInterface<QNativeInterface::QGLXContext>();
-            if (!config.platform.qt.gl_context) {
-                config.platform.qt.gl_context = ctx->nativeInterface<QNativeInterface::QEGLContext>();
-            }
-        }
-
-        return true;
-#else
-        Q_UNUSED(config);
-        Q_UNUSED(nativeWindowHandle);
-        Q_UNUSED(scaleFactor);
-        return false;
-#endif
+        // A native GL context handle is required for the renderer to attach.
+        return config.platform.qt.gl_context != nullptr;
     }
+#endif
 };
 
 } // namespace c11

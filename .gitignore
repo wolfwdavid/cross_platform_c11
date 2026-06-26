@@ -60,3 +60,12 @@ artifacts/openai-cua-runs/
 # the private-repo standard.
 .etch/*
 !.etch/settings.json
+
+# Windows MSVC build logs and local build helper (machine-specific paths)
+/qt_install.log
+/qt_install2.log
+/c11_build.log
+c11-qt/build_msvc.bat
+
+# Local planning scratch
+/tasks/

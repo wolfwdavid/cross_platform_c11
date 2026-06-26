@@ -32,6 +32,11 @@ StatusBar::StatusBar(WorkspaceManager &manager, QWidget *parent)
     connect(&m_manager, &WorkspaceManager::workspaceRemoved,
             this, [this](const QUuid &, int) { updateStatus(); });
 
+    // Subscribe to the workspace that is already selected at construction.
+    // onSelectionChanged only fires on a *change*, so without this the initial
+    // workspace's panelAdded/Removed signals are never connected and the pane
+    // counter goes stale after the first split.
+    connectToSelectedWorkspace();
     updateStatus();
 }
 
@@ -60,17 +65,24 @@ void StatusBar::onSelectionChanged(const QUuid &id)
 {
     Q_UNUSED(id);
     updateStatus();
+    connectToSelectedWorkspace();
+}
 
-    // Connect to the new workspace's signals (disconnect old first)
-    if (auto *ws = m_manager.selectedWorkspace()) {
-        // Disconnect any previous workspace connections to this
-        for (auto *other : m_manager.workspaces()) {
-            if (other != ws) disconnect(other, nullptr, this, nullptr);
-        }
-        connect(ws, &Workspace::panelAdded, this, [this](const QUuid &) { updateStatus(); });
-        connect(ws, &Workspace::panelRemoved, this, [this](const QUuid &) { updateStatus(); });
-        connect(ws, &Workspace::titleChanged, this, [this](const QString &) { updateStatus(); });
+void StatusBar::connectToSelectedWorkspace()
+{
+    auto *ws = m_manager.selectedWorkspace();
+    if (!ws) return;
+
+    // Disconnect any previous workspace connections to this (avoid duplicate
+    // slots if we re-subscribe to the same workspace, and drop stale ones).
+    for (auto *other : m_manager.workspaces()) {
+        if (other != ws) disconnect(other, nullptr, this, nullptr);
     }
+    disconnect(ws, nullptr, this, nullptr);
+
+    connect(ws, &Workspace::panelAdded, this, [this](const QUuid &) { updateStatus(); });
+    connect(ws, &Workspace::panelRemoved, this, [this](const QUuid &) { updateStatus(); });
+    connect(ws, &Workspace::titleChanged, this, [this](const QString &) { updateStatus(); });
 }
 
 } // namespace c11

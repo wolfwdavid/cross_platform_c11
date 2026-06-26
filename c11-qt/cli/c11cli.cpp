@@ -99,6 +99,10 @@ int main(int argc, char *argv[])
                 << "  new-pane             Create new terminal pane\n"
                 << "  new-split            Split current pane\n"
                 << "  close-surface        Close surface/panel\n"
+                << "  send                 Send text to a surface (--surface ID, --no-submit)\n"
+                << "  send-key             Send a key chord, e.g. ctrl+c, enter (--surface ID)\n"
+                << "  read-screen          Read a surface's text (--surface ID, --lines N, --scrollback)\n"
+                << "  identify             Show the calling surface's refs (from C11_SURFACE_ID)\n"
                 << "  open-browser         Open browser panel\n"
                 << "  capabilities         Show capabilities (V2)\n"
                 << "\nOptions:\n"
@@ -121,6 +125,175 @@ int main(int argc, char *argv[])
     }
 
     QString command = remaining.takeFirst();
+
+    // `send` has its own flags (--surface, --text, --no-submit, --) and free-form
+    // text that may contain spaces or leading dashes, so it gets dedicated parsing
+    // rather than the generic positional mapper below.
+    if (command == "send") {
+        QString surfaceId;
+        QString text;
+        bool haveText = false;
+        bool submit = true;
+        QStringList positional;
+
+        for (int i = 0; i < remaining.size(); ++i) {
+            const QString &a = remaining[i];
+            if (a == "--") {                       // everything after is literal text
+                positional << remaining.mid(i + 1);
+                break;
+            } else if (a == "--surface" && i + 1 < remaining.size()) {
+                surfaceId = remaining[++i];
+            } else if (a.startsWith("--surface=")) {
+                surfaceId = a.mid(10);
+            } else if (a == "--text" && i + 1 < remaining.size()) {
+                text = remaining[++i]; haveText = true;
+            } else if (a.startsWith("--text=")) {
+                text = a.mid(7); haveText = true;
+            } else if (a == "--no-submit") {
+                submit = false;
+            } else if (a == "--submit") {
+                submit = true;
+            } else if (a == "--workspace" && i + 1 < remaining.size()) {
+                ++i;                               // accepted for skill-compat; c11-qt targets by surface id
+            } else if (a.startsWith("--workspace=")) {
+                // accepted and ignored
+            } else {
+                positional << a;
+            }
+        }
+
+        if (!haveText) text = positional.join(" ");
+        if (text.isEmpty()) {
+            err << "Error: send requires text (positional, or --text)\n";
+            return 1;
+        }
+
+        QJsonObject params;
+        if (!surfaceId.isEmpty()) params["id"] = surfaceId;
+        params["text"] = text;
+        params["submit"] = submit;
+
+        QString request = buildV2Request("surface.send", params);
+        QString response = sendCommand(socketPath, request);
+        QJsonDocument doc = QJsonDocument::fromJson(response.toUtf8());
+        if (!doc.isNull()) {
+            out << doc.toJson(QJsonDocument::Indented);
+        } else {
+            out << response << "\n";
+        }
+        return 0;
+    }
+
+    // `send-key` takes a single chord (e.g. ctrl+c, enter) plus optional
+    // --surface / --workspace targeting.
+    if (command == "send-key") {
+        QString surfaceId;
+        QString chord;
+
+        for (int i = 0; i < remaining.size(); ++i) {
+            const QString &a = remaining[i];
+            if (a == "--surface" && i + 1 < remaining.size()) {
+                surfaceId = remaining[++i];
+            } else if (a.startsWith("--surface=")) {
+                surfaceId = a.mid(10);
+            } else if (a == "--workspace" && i + 1 < remaining.size()) {
+                ++i;                               // accepted for skill-compat
+            } else if (a.startsWith("--workspace=")) {
+                // accepted and ignored
+            } else if (chord.isEmpty()) {
+                chord = a;
+            }
+        }
+
+        if (chord.isEmpty()) {
+            err << "Error: send-key requires a chord (e.g. ctrl+c, enter)\n";
+            return 1;
+        }
+
+        QJsonObject params;
+        if (!surfaceId.isEmpty()) params["id"] = surfaceId;
+        params["key"] = chord;
+
+        QString request = buildV2Request("surface.send_key", params);
+        QString response = sendCommand(socketPath, request);
+        QJsonDocument doc = QJsonDocument::fromJson(response.toUtf8());
+        if (!doc.isNull()) {
+            out << doc.toJson(QJsonDocument::Indented);
+        } else {
+            out << response << "\n";
+        }
+        return 0;
+    }
+
+    // `read-screen` prints the surface's rendered text directly (not the JSON
+    // envelope) so it's readable; --lines N keeps the last N lines, --scrollback
+    // includes history.
+    if (command == "read-screen") {
+        QString surfaceId;
+        int lines = 0;
+        bool scrollback = false;
+
+        for (int i = 0; i < remaining.size(); ++i) {
+            const QString &a = remaining[i];
+            if (a == "--surface" && i + 1 < remaining.size()) surfaceId = remaining[++i];
+            else if (a.startsWith("--surface=")) surfaceId = a.mid(10);
+            else if (a == "--lines" && i + 1 < remaining.size()) lines = remaining[++i].toInt();
+            else if (a.startsWith("--lines=")) lines = a.mid(8).toInt();
+            else if (a == "--scrollback") scrollback = true;
+            else if (a == "--workspace" && i + 1 < remaining.size()) ++i; // skill-compat
+            else if (a.startsWith("--workspace=")) { /* ignored */ }
+        }
+
+        QJsonObject params;
+        if (!surfaceId.isEmpty()) params["id"] = surfaceId;
+        if (lines > 0) params["lines"] = lines;
+        if (scrollback) params["scrollback"] = true;
+
+        QString request = buildV2Request("surface.read_screen", params);
+        QString response = sendCommand(socketPath, request);
+        QJsonDocument doc = QJsonDocument::fromJson(response.toUtf8());
+        if (!doc.isNull()) {
+            QJsonObject result = doc.object().value("result").toObject();
+            if (result.contains("text")) {
+                out << result.value("text").toString() << "\n";
+            } else {
+                out << doc.toJson(QJsonDocument::Indented); // error envelope
+            }
+        } else {
+            out << response << "\n";
+        }
+        return 0;
+    }
+
+    // `identify` reports the calling surface's refs. The caller's identity comes
+    // from C11_SURFACE_ID (injected into the pane's shell at spawn); --surface
+    // overrides it.
+    if (command == "identify") {
+        QString surfaceId;
+        for (int i = 0; i < remaining.size(); ++i) {
+            const QString &a = remaining[i];
+            if (a == "--surface" && i + 1 < remaining.size()) surfaceId = remaining[++i];
+            else if (a.startsWith("--surface=")) surfaceId = a.mid(10);
+        }
+        if (surfaceId.isEmpty()) {
+            QByteArray sid = qgetenv("C11_SURFACE_ID");
+            if (sid.isEmpty()) sid = qgetenv("CMUX_SURFACE_ID");
+            surfaceId = QString::fromUtf8(sid);
+        }
+
+        QJsonObject params;
+        if (!surfaceId.isEmpty()) params["surface"] = surfaceId;
+
+        QString request = buildV2Request("system.identify", params);
+        QString response = sendCommand(socketPath, request);
+        QJsonDocument doc = QJsonDocument::fromJson(response.toUtf8());
+        if (!doc.isNull()) {
+            out << doc.toJson(QJsonDocument::Indented);
+        } else {
+            out << response << "\n";
+        }
+        return 0;
+    }
 
     // V2 method map
     static const QMap<QString, QString> v2Methods = {
@@ -163,10 +336,52 @@ int main(int argc, char *argv[])
         QString method = v2Methods.value(command, command);
         QJsonObject params;
 
+        // Store a value under the right JSON type. The router reads most params
+        // as strings, but `index` as an int and `select` as a bool, so a bare
+        // string would be silently coerced to 0 / the default.
+        auto setParam = [&](const QString &key, const QString &value) {
+            if (key == "index") {
+                params[key] = value.toInt();
+            } else if (key == "select") {
+                params[key] = (value == "true" || value == "1");
+            } else {
+                params[key] = value;
+            }
+        };
+
+        QStringList positionals;
         for (const auto &arg : remaining) {
-            if (arg.contains('=')) {
-                int eq = arg.indexOf('=');
-                params[arg.left(eq).remove(0, arg.startsWith("--") ? 2 : 0)] = arg.mid(eq + 1);
+            int eq = arg.indexOf('=');
+            if (eq > 0) { // key=value or --key=value
+                QString key = arg.left(eq);
+                if (key.startsWith("--")) key = key.mid(2);
+                setParam(key, arg.mid(eq + 1));
+            } else if (!arg.startsWith("-")) {
+                positionals << arg; // bare value, mapped per-command below
+            }
+        }
+
+        // Map leading positional args to the param each command expects, so the
+        // natural CLI form works (e.g. `open-browser <url>`, `select-workspace 2`)
+        // and not only the explicit `key=value` form.
+        if (!positionals.isEmpty()) {
+            const QString &first = positionals.first();
+            if (command == "select-workspace") {
+                // A number is a 0-based index; anything else is a workspace id.
+                bool isInt = false;
+                first.toInt(&isInt);
+                setParam(isInt ? "index" : "id", first);
+            } else {
+                static const QMap<QString, QString> firstPositional = {
+                    {"open-browser",    "url"},
+                    {"new-split",       "direction"},
+                    {"new-workspace",   "title"},
+                    {"new-pane",        "cwd"},
+                    {"close-workspace", "id"},
+                    {"close-surface",   "id"},
+                };
+                const QString key = firstPositional.value(command);
+                if (!key.isEmpty() && !params.contains(key)) setParam(key, first);
             }
         }
 

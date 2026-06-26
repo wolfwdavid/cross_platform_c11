@@ -4,6 +4,7 @@
 
 #include <QDebug>
 #include <QSettings>
+#include <QProcess>
 
 #include <windows.h>
 #include <tlhelp32.h>
@@ -75,11 +76,34 @@ bool hasConPtySupport()
 
 void showToastNotification(const QString &title, const QString &body)
 {
-    // Use PowerShell for toast notifications as a simple cross-version approach.
-    // A production implementation would use WinRT's ToastNotificationManager.
-    Q_UNUSED(title);
-    Q_UNUSED(body);
-    // TODO: Implement via WinRT ToastNotificationManager
+    // Show a tray balloon via PowerShell + WinForms NotifyIcon. This works on
+    // all supported Windows versions without registering an AppUserModelID.
+    // A future enhancement could use WinRT's ToastNotificationManager.
+    auto sanitize = [](QString s) {
+        s.replace('\'', QStringLiteral("''")); // escape PowerShell single quotes
+        s.remove('\r');
+        s.replace('\n', ' ');
+        return s;
+    };
+
+    const QString script =
+        QStringLiteral(
+            "Add-Type -AssemblyName System.Windows.Forms;"
+            "Add-Type -AssemblyName System.Drawing;"
+            "$n = New-Object System.Windows.Forms.NotifyIcon;"
+            "$n.Icon = [System.Drawing.SystemIcons]::Information;"
+            "$n.BalloonTipTitle = '%1';"
+            "$n.BalloonTipText = '%2';"
+            "$n.Visible = $true;"
+            "$n.ShowBalloonTip(5000);"
+            "Start-Sleep -Seconds 6;"
+            "$n.Dispose()")
+            .arg(sanitize(title), sanitize(body));
+
+    QProcess::startDetached(QStringLiteral("powershell"),
+                            {QStringLiteral("-NoProfile"),
+                             QStringLiteral("-WindowStyle"), QStringLiteral("Hidden"),
+                             QStringLiteral("-Command"), script});
 }
 
 bool isSystemDarkMode()

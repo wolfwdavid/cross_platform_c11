@@ -1,5 +1,11 @@
 cmake_minimum_required(VERSION 3.25)
-project(c11 VERSION 0.1.0 LANGUAGES CXX C OBJCXX)
+# Objective-C++ is only used by the Apple-gated GhosttyNSViewBridge.mm.
+# Enabling it unconditionally makes CMake probe an ObjC++ compiler on
+# Windows/Linux (where none exists), so enable it only on Apple platforms.
+project(c11 VERSION 0.1.0 LANGUAGES CXX C)
+if(APPLE)
+    enable_language(OBJCXX)
+endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -18,6 +24,7 @@ set(C11_SOURCES
     src/ghostty/GhosttyConfig.cpp
     src/ghostty/GhosttyWidget.cpp
     src/ghostty/GhosttyKeyMapper.cpp
+    $<$<NOT:$<PLATFORM_ID:Darwin>>:src/ghostty/GhosttyGlContext.cpp>
     src/panel/Panel.cpp
     src/panel/TerminalPanel.cpp
     src/panel/BrowserPanel.cpp
@@ -86,6 +93,14 @@ set_target_properties(c11-app PROPERTIES
     OUTPUT_NAME "c11"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
+
+# Stage a prebuilt libghostty DLL next to the executable so it loads at runtime.
+if(C11_GHOSTTY_RUNTIME_DLL AND EXISTS "${C11_GHOSTTY_RUNTIME_DLL}")
+    add_custom_command(TARGET c11-app POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${C11_GHOSTTY_RUNTIME_DLL}" "$<TARGET_FILE_DIR:c11-app>"
+        COMMENT "Staging libghostty DLL next to c11.exe")
+endif()
 
 # macOS bundle
 if(APPLE)
